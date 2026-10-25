@@ -1,20 +1,23 @@
 /**
  * Vite config for the Capacitor / Android static build.
- * Builds a self-contained SPA into dist-mobile/ (no server).
+ * Output must be dist-mobile/index.html (Capacitor requirement).
  */
 import { defineConfig } from "vite";
 import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "node:path";
 
+const srcDir = resolve(__dirname, "src");
+const mobileDir = resolve(srcDir, "mobile");
+
 export default defineConfig({
-  // Project root so Tailwind scans all of src/ (components, styles, etc.)
+  root: mobileDir,
   base: "./",
   publicDir: resolve(__dirname, "public"),
   plugins: [tailwindcss(), viteReact()],
   resolve: {
     alias: {
-      "@": resolve(__dirname, "src"),
+      "@": srcDir,
     },
   },
   build: {
@@ -23,9 +26,6 @@ export default defineConfig({
     assetsDir: "assets",
     sourcemap: false,
     target: "es2020",
-    rollupOptions: {
-      input: resolve(__dirname, "src/mobile/index.html"),
-    },
   },
   server: {
     host: "0.0.0.0",
