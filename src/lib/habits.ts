@@ -378,11 +378,20 @@ function notificationActions(): NoteAction[] {
 }
 
 export async function notifyHabit(habitItem: Habit): Promise<boolean> {
-  if (typeof Notification === "undefined" || Notification.permission !== "granted") return false;
+  if (typeof Notification === "undefined") return false;
+
+  // Ask for permission if we don't have it yet (needed on Android 13+)
+  if (Notification.permission === "default") {
+    const result = await Notification.requestPermission();
+    if (result !== "granted") return false;
+  }
+  if (Notification.permission !== "granted") return false;
+
   const title = `${format12(habitItem.time)} — ${habitItem.name}`;
-  const body = habitItem.question || "Mark Done, Partial, or Missed. It stays until you do.";
+  const body = habitItem.question || "Open the app and mark it when done. This stays until you do.";
   const tag = `habit-${habitItem.id}-${dateKey(0)}`;
   const sticky = habitItem.sticky !== false;
+
   const data = {
     habitId: habitItem.id,
     dateKey: dateKey(0),
@@ -392,30 +401,24 @@ export async function notifyHabit(habitItem: Habit): Promise<boolean> {
     question: habitItem.question || "",
     timeLabel: format12(habitItem.time),
   };
-  const options = {
+
+  const options: NotificationOptions = {
     body,
     tag,
     renotify: true,
-    requireInteraction: sticky,
+    requireInteraction: sticky, // keeps it sticky
     vibrate: [80, 40, 80],
     data,
+    // no action buttons
   };
+
   try {
     const reg = await registerHabitWorker();
     if (reg) {
-      const actions = notificationActions();
-      const withActions = (next: NoteAction[]) => ({ ...options, actions: next }) as NotificationOptions;
-      try {
-        await reg.showNotification(title, withActions(actions));
-      } catch {
-        await reg.showNotification(title, withActions([
-          { action: "done", title: "Done" },
-          { action: "more", title: "Partial / Missed" },
-        ]));
-      }
+      await reg.showNotification(title, options);
       return true;
     }
-    new Notification(title, { body, tag, requireInteraction: sticky, data });
+    new Notification(title, options);
     return true;
   } catch {
     return false;

@@ -25,6 +25,13 @@
     "cap:add:android": "npx cap add android"
   },
   "dependencies": {
+    "@capacitor/android": "7.6.9",
+    "@capacitor/app": "7.1.2",
+    "@capacitor/core": "7.6.9",
+    "@capacitor/haptics": "7.0.5",
+    "@capacitor/keyboard": "7.0.6",
+    "@capacitor/local-notifications": "^7.0.7",
+    "@capacitor/status-bar": "7.0.6",
     "@electric-sql/pglite": "^0.5.4",
     "@hookform/resolvers": "^5.7.0",
     "@radix-ui/react-accordion": "^1.2.12",
@@ -80,15 +87,10 @@
     "vaul": "^1.1.2",
     "vite": "^8.2.0",
     "zod": "^4.4.0",
-    "zustand": "^5.0.0",
-    "@capacitor/android": "7.6.9",
-    "@capacitor/app": "7.1.2",
-    "@capacitor/core": "7.6.9",
-    "@capacitor/haptics": "7.0.5",
-    "@capacitor/keyboard": "7.0.6",
-    "@capacitor/status-bar": "7.0.6"
+    "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "7.6.9",
     "@eslint/js": "^9.20.0",
     "@types/node": "^22.16.5",
     "@types/pg": "^8.11.10",
@@ -102,7 +104,6 @@
     "globals": "^15.15.0",
     "playwright": "^1.62.0",
     "prettier": "^3.4.0",
-    "typescript-eslint": "^8.56.1",
-    "@capacitor/cli": "7.6.9"
+    "typescript-eslint": "^8.56.1"
   }
 }
