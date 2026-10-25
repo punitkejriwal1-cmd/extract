@@ -816,6 +816,33 @@ export const $ZodDate = /*@__PURE__*/ core.$constructor("$ZodDate", (inst, def) 
         return payload;
     };
 });
+// an oversized container fails its leading size checks before any element is parsed
+function capSize(inst, size) {
+    const caps = util.sizeCaps(inst._zod.def.checks);
+    if (!caps.length)
+        return;
+    const cap = Math.min(...caps.map((c) => c[0]));
+    const parse = inst._zod.parse;
+    inst._zod.parse = (payload, ctx) => {
+        const n = size(payload.value);
+        if (n > cap && !ctx?.skipChecks && ctx?.direction !== "backward") {
+            for (const [max, ch] of util.sizeCaps(inst._zod.def.checks)) {
+                if (n > max && ch._zod.def.when(payload)) {
+                    const start = payload.issues.length;
+                    ch._zod.check(payload);
+                    // the value is still the raw input, so no later check may read it
+                    payload.issues[start].continue = false;
+                    util.attachSchema(payload.issues, start, inst);
+                    return payload;
+                }
+            }
+        }
+        return parse(payload, ctx);
+    };
+}
+const arraySize = (input) => (Array.isArray(input) ? input.length : -1);
+const mapSize = (input) => (input instanceof Map ? input.size : -1);
+const setSize = (input) => (input instanceof Set ? input.size : -1);
 function handleArrayResult(result, final, index) {
     if (result.issues.length) {
         final.issues.push(...util.prefixIssues(index, result.issues));
@@ -861,6 +888,7 @@ export const $ZodArray = /*@__PURE__*/ core.$constructor("$ZodArray", (inst, def
         }
         return payload; //handleArrayResultsAsync(parseResults, final);
     };
+    capSize(inst, arraySize);
 });
 function handlePropertyResult(result, final, key, input, optin, optout) {
     const isPresent = key in input;
@@ -1898,6 +1926,7 @@ export const $ZodMap = /*@__PURE__*/ core.$constructor("$ZodMap", (inst, def) =>
             return Promise.all(proms).then(() => payload);
         return payload;
     };
+    capSize(inst, mapSize);
 });
 function handleMapResult(keyResult, valueResult, final, key, input, inst, ctx) {
     if (keyResult.issues.length) {
@@ -1967,6 +1996,7 @@ export const $ZodSet = /*@__PURE__*/ core.$constructor("$ZodSet", (inst, def) =>
             return Promise.all(proms).then(() => payload);
         return payload;
     };
+    capSize(inst, setSize);
 });
 function handleSetResult(result, final) {
     if (result.issues.length) {

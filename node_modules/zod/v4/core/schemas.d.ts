@@ -834,8 +834,10 @@ export type $InferZodRecordOutput<Key extends $ZodRecordKey = $ZodRecordKey, Val
 export type $InferZodRecordInput<Key extends $ZodRecordKey = $ZodRecordKey, Value extends SomeType = $ZodType> = Key extends $partial ? Partial<Record<core.input<Key> & PropertyKey, core.input<Value>>> : [
     Value
 ] extends [OptionalInSchema] ? Partial<Record<core.input<Key> & PropertyKey, core.input<Value>>> : Record<core.input<Key> & PropertyKey, core.input<Value>>;
-export interface $ZodRecordInternals<Key extends $ZodRecordKey = $ZodRecordKey, Value extends SomeType = $ZodType> extends $ZodTypeInternals<$InferZodRecordOutput<Key, Value>, $InferZodRecordInput<Key, Value>> {
+export interface $ZodRecordInternals<Key extends $ZodRecordKey = $ZodRecordKey, Value extends SomeType = $ZodType> extends $ZodTypeInternals {
     def: $ZodRecordDef<Key, Value>;
+    output: $InferZodRecordOutput<Key, Value>;
+    input: $InferZodRecordInput<Key, Value>;
     isst: errors.$ZodIssueInvalidType | errors.$ZodIssueInvalidKey<Record<PropertyKey, unknown>>;
     optin?: "optional" | undefined;
     optout?: "optional" | undefined;
