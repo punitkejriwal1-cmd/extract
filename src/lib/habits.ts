@@ -377,50 +377,60 @@ function notificationActions(): NoteAction[] {
   return [];
 }
 
+import { LocalNotifications } from "@capacitor/local-notifications";
+
 export async function notifyHabit(habitItem: Habit): Promise<boolean> {
-  if (typeof Notification === "undefined") return false;
-
-  // Ask for permission if we don't have it yet (needed on Android 13+)
-  if (Notification.permission === "default") {
-    const result = await Notification.requestPermission();
-    if (result !== "granted") return false;
-  }
-  if (Notification.permission !== "granted") return false;
-
-  const title = `${format12(habitItem.time)} — ${habitItem.name}`;
-  const body = habitItem.question || "Open the app and mark it when done. This stays until you do.";
-  const tag = `habit-${habitItem.id}-${dateKey(0)}`;
-  const sticky = habitItem.sticky !== false;
-
-  const data = {
-    habitId: habitItem.id,
-    dateKey: dateKey(0),
-    sticky,
-    stage: "root",
-    name: habitItem.name,
-    question: habitItem.question || "",
-    timeLabel: format12(habitItem.time),
-  };
-
-  const options: NotificationOptions = {
-    body,
-    tag,
-    renotify: true,
-    requireInteraction: sticky, // keeps it sticky
-    vibrate: [80, 40, 80],
-    data,
-    // no action buttons
-  };
-
   try {
-    const reg = await registerHabitWorker();
-    if (reg) {
-      await reg.showNotification(title, options);
-      return true;
+    // Request permission (Android 13+)
+    const perm = await LocalNotifications.checkPermissions();
+    if (perm.display !== "granted") {
+      const req = await LocalNotifications.requestPermissions();
+      if (req.display !== "granted") return false;
     }
-    new Notification(title, options);
+
+    // Create a high-importance channel (sticky behaviour)
+    await LocalNotifications.createChannel({
+      id: "habits",
+      name: "Habit Reminders",
+      description: "Sticky reminders for your habits",
+      importance: 5,
+      visibility: 1,
+      vibration: true,
+    });
+
+    const title = `${format12(habitItem.time)} — ${habitItem.name}`;
+    const body =
+      habitItem.question ||
+      "Open the app and mark it when done. This stays until you do.";
+
+    // Unique ID based on habit + date
+    const id = Math.abs(
+      (habitItem.id + dateKey(0))
+        .split("")
+        .reduce((a, c) => ((a << 5) - a + c.charCodeAt(0)) | 0, 0),
+    );
+
+    await LocalNotifications.schedule({
+      notifications: [
+        {
+          id,
+          title,
+          body,
+          channelId: "habits",
+          ongoing: true,
+          autoCancel: false,
+          schedule: { at: new Date(Date.now() + 500) },
+          extra: {
+            habitId: habitItem.id,
+            dateKey: dateKey(0),
+          },
+        },
+      ],
+    });
+
     return true;
-  } catch {
+  } catch (err) {
+    console.error("notifyHabit error:", err);
     return false;
   }
 }

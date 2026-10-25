@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Sheet } from "@/components/tracker/sheet";
 import { cn } from "@/lib/cn";
+import { LocalNotifications } from "@capacitor/local-notifications";
 import { useHabits } from "@/lib/habit-store";
 import { notifyHabit } from "@/lib/habits";
 
@@ -33,29 +34,31 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
     return () => window.removeEventListener("beforeinstallprompt", onPrompt);
   }, []);
 
-  async function enableAlerts() {
-    if (typeof Notification === "undefined") {
-      showToast("This browser has no notifications");
-      return;
-    }
-    const result = await Notification.requestPermission();
-    setPermission(result);
-    showToast(result === "granted" ? "Notifications on" : "Permission denied");
+async function enableAlerts() {
+  try {
+    const perm = await LocalNotifications.requestPermissions();
+    setPermission(perm.display === "granted" ? "granted" : "denied");
+    showToast(perm.display === "granted" ? "Notifications on" : "Permission denied");
+  } catch {
+    showToast("Could not request permission");
+  }
+}
+
+async function testAlert() {
+  const sample = data.habits[0];
+  if (!sample) {
+    showToast("Add a habit first");
+    return;
   }
 
-  async function testAlert() {
-    const sample = data.habits[0];
-    if (!sample) {
-      showToast("Add a habit first");
-      return;
-    }
-    if (permission !== "granted") {
-      await enableAlerts();
-    }
-    const ok = await notifyHabit({ ...sample, sticky: true });
-    showToast(ok ? "Notification sent — it stays until you answer" : "Allow notifications first");
+  const perm = await LocalNotifications.checkPermissions();
+  if (perm.display !== "granted") {
+    await enableAlerts();
   }
 
+  const ok = await notifyHabit({ ...sample, sticky: true });
+  showToast(ok ? "Notification sent — it stays until you mark it" : "Allow notifications first");
+}
   async function install() {
     if (installEvent) {
       await installEvent.prompt();
