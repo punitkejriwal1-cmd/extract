@@ -43,7 +43,7 @@ jobs:
           cache: npm
 
       - name: Install JS dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build mobile web assets
         run: npm run build:mobile
