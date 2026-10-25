@@ -56,7 +56,9 @@ jobs:
           ls android
 
       - name: Sync Capacitor
-        run: npx cap sync android
+        run: |
+          chmod +x node_modules/@capacitor/cli/bin/capacitor || true
+          node node_modules/@capacitor/cli/bin/capacitor sync android
 
       - name: Build debug APK
         working-directory: android
