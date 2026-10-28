@@ -31,7 +31,9 @@ class HabitRepository(private val db: AppDatabase) {
                 .put("id", h.id).put("name", h.name).put("question", h.question)
                 .put("startTime", h.startTime).put("endTime", h.endTime)
                 .put("reminderTime", h.reminderTime).put("reminderDays", days)
-                .put("color", String.format("#%06X", 0xFFFFFF and h.color.toInt())))
+                .put("color", String.format("#%06X", 0xFFFFFF and h.color.toInt()))
+                .put("freqType", h.freqType).put("freqDays", JSONArray(h.freqDays.split(",").mapNotNull { it.trim().toIntOrNull() }))
+                .put("freqNum", h.freqNum).put("freqDates", JSONArray(h.freqDates.split(",").map { it.trim() }.filter { it.isNotEmpty() })))
         }
         val logObject = JSONObject()
         logs.getAll().forEach { l ->
@@ -83,6 +85,18 @@ class HabitRepository(private val db: AppDatabase) {
                 startTime = start, endTime = o.optString("endTime", ""),
                 reminderTime = remind, reminderDays = days.joinToString(","),
                 color = color, sortKey = start,
+                freqType = o.optString("freqType", "daily"),
+                freqDays = when (val fd = o.opt("freqDays")) {
+                    is JSONArray -> (0 until fd.length()).mapNotNull { fd.optInt(it, -1).takeIf { d -> d in 0..6 } }.distinct().joinToString(",")
+                    is String -> fd
+                    else -> "0,1,2,3,4,5,6"
+                },
+                freqNum = o.optInt("freqNum", 2).coerceIn(1, 31),
+                freqDates = when (val fds = o.opt("freqDates")) {
+                    is JSONArray -> (0 until fds.length()).mapNotNull { fds.optString(it).takeIf(String::isNotBlank) }.joinToString(",")
+                    is String -> fds
+                    else -> ""
+                },
             )
         }
 
