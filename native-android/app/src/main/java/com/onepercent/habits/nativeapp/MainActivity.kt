@@ -67,8 +67,8 @@ class MainActivity : ComponentActivity() {
                         )
                         is Screen.Edit -> HabitEditorScreen(
                             existing = s.habit,
-                            onSave = { id, name, q, start, end, remind, days, color ->
-                                vm.saveHabit(id, name, q, start, end, remind, days, color)
+                            onSave = { id, name, q, start, end, remind, days, color, freqType, freqDays, freqNum, freqDates ->
+                                vm.saveHabit(id, name, q, start, end, remind, days, color, freqType, freqDays, freqNum, freqDates)
                                 screen = Screen.Home
                             },
                             onDelete = { id ->
