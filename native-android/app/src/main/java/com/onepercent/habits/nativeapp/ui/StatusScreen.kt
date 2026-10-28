@@ -10,10 +10,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -76,9 +78,15 @@ fun StatusScreen(habitId: String, dateKey: String, vm: HabitsViewModel, onClose:
             if (status == "partial" || status == "missed") {
                 Text("Reason for not completing", style = MaterialTheme.typography.titleMedium)
                 availableReasons.forEach { reason ->
-                    FilterChip(selected = reason in reasons, onClick = {
-                        reasons = if (reason in reasons) reasons - reason else reasons + reason
-                    }, label = { Text(reason) })
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        FilterChip(selected = reason in reasons, onClick = {
+                            reasons = if (reason in reasons) reasons - reason else reasons + reason
+                        }, label = { Text(reason) })
+                        IconButton(onClick = {
+                            vm.removeReason(reason)
+                            reasons = reasons - reason
+                        }) { Icon(Icons.Default.Close, contentDescription = "Remove $reason") }
+                    }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     OutlinedTextField(value = reasonInput, onValueChange = { reasonInput = it.take(40) },
