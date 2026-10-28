@@ -76,7 +76,7 @@ fun AuditScreen(vm: HabitsViewModel, onClose: () -> Unit) {
                     try {
                         val (start, end) = range()
                         LocalDate.parse(start); LocalDate.parse(end)
-                        preview = vm.exportLogs(start, end)
+                        preview = vm.buildAuditText(mode, start, end)
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         clipboard.setPrimaryClip(ClipData.newPlainText("Habit logs", preview))
                         message = "Logs copied to clipboard."
