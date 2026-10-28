@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -52,6 +53,10 @@ fun HabitEditorScreen(
         reminderTime: String,
         reminderDays: String,
         color: Long,
+        freqType: String,
+        freqDays: String,
+        freqNum: Int,
+        freqDates: String,
     ) -> Unit,
     onDelete: (String) -> Unit,
     onClose: () -> Unit,
@@ -71,6 +76,10 @@ fun HabitEditorScreen(
         )
     }
     var color by remember { mutableStateOf(existing?.color ?: COLORS[Random.nextInt(COLORS.size)]) }
+    var freqType by remember { mutableStateOf(existing?.freqType ?: "daily") }
+    var freqDays by remember { mutableStateOf(existing?.freqDays?.split(",")?.mapNotNull { it.toIntOrNull() }?.toSet() ?: (0..6).toSet()) }
+    var freqNum by remember { mutableStateOf((existing?.freqNum ?: 2).toString()) }
+    var freqDates by remember { mutableStateOf(existing?.freqDates.orEmpty()) }
 
     Scaffold(
         topBar = {
@@ -148,6 +157,25 @@ fun HabitEditorScreen(
                 }
             }
 
+            Text("How often", style = MaterialTheme.typography.labelLarge)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                listOf("daily" to "Every day", "weekdays_custom" to "Specific weekdays", "every_x_days" to "Every X days", "x_per_week" to "X / week", "x_per_month" to "X / month", "specific_dates" to "Specific dates").forEach { (value, label) ->
+                    FilterChip(selected = freqType == value, onClick = { freqType = value }, label = { Text(label) })
+                }
+            }
+            if (freqType == "weekdays_custom") {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    DAY_LABELS.forEachIndexed { i, label ->
+                        FilterChip(selected = i in freqDays, onClick = { freqDays = if (i in freqDays) freqDays - i else freqDays + i }, label = { Text(label) })
+                    }
+                }
+            }
+            if (freqType == "every_x_days" || freqType == "x_per_week" || freqType == "x_per_month") {
+                OutlinedTextField(value = freqNum, onValueChange = { freqNum = it.filter(Char::isDigit).take(2) }, label = { Text(if (freqType == "every_x_days") "Every how many days" else "Number of times") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            }
+            if (freqType == "specific_dates") {
+                OutlinedTextField(value = freqDates, onValueChange = { freqDates = it }, label = { Text("Dates (YYYY-MM-DD, comma-separated)") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+            }
             Spacer(Modifier.height(8.dp))
             Button(
                 onClick = {
@@ -161,6 +189,10 @@ fun HabitEditorScreen(
                         remind.ifBlank { start.ifBlank { "09:00" } },
                         days.sorted().joinToString(","),
                         color,
+                        freqType,
+                        freqDays.sorted().joinToString(","),
+                        (freqNum.toIntOrNull() ?: 2).coerceIn(1, 31),
+                        freqDates,
                     )
                 },
                 modifier = Modifier.fillMaxWidth(),
