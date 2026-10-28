@@ -19,10 +19,6 @@ data class HabitEntity(
     @ColumnInfo(defaultValue = "'0,1,2,3,4,5,6'") val freqDays: String = "0,1,2,3,4,5,6",
     @ColumnInfo(defaultValue = "2") val freqNum: Int = 2,
     @ColumnInfo(defaultValue = "''") val freqDates: String = "",
-    @ColumnInfo(defaultValue = "'daily'") val freqType: String = "daily",
-    @ColumnInfo(defaultValue = "'0,1,2,3,4,5,6'") val freqDays: String = "0,1,2,3,4,5,6",
-    @ColumnInfo(defaultValue = "2") val freqNum: Int = 2,
-    @ColumnInfo(defaultValue = "''") val freqDates: String = "",
 )
 
 @Entity(tableName = "logs", primaryKeys = ["dateKey", "habitId"])
