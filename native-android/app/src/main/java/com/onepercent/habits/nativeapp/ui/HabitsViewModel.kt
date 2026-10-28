@@ -96,10 +96,6 @@ class HabitsViewModel(app: Application) : AndroidViewModel(app) {
         freqNum: Int,
         freqDates: String,
         color: Long,
-        freqType: String = "daily",
-        freqDays: String = "0,1,2,3,4,5,6",
-        freqNum: Int = 2,
-        freqDates: String = "",
     ) {
         viewModelScope.launch {
             val entity = HabitEntity(
@@ -115,10 +111,6 @@ class HabitsViewModel(app: Application) : AndroidViewModel(app) {
                 freqType = freqType,
                 freqDays = freqDays,
                 freqNum = freqNum.coerceIn(1, 31),
-                freqDates = freqDates,
-                freqType = freqType,
-                freqDays = freqDays,
-                freqNum = freqNum,
                 freqDates = freqDates,
             )
             repo.upsertHabit(entity)
