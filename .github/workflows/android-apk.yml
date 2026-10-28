@@ -45,6 +45,14 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x android/gradlew
 
+      # Preserve the generated debug signing key between builds so APK updates
+      # use the same certificate. The currently installed APK may need one final reinstall.
+      - name: Restore persistent debug signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: one-percent-debug-signing-key-v1-${{ github.ref_name }}
+
       - name: Run native unit tests
         run: ./android/gradlew -p native-android testDebugUnitTest --no-daemon --stacktrace
 
