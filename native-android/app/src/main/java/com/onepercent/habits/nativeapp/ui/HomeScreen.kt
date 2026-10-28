@@ -77,7 +77,7 @@ fun HomeScreen(
                     val done = state.habits.count { h ->
                         state.logsByKey[state.dateKeys.firstOrNull().orEmpty()]?.get(h.id)?.status == "done"
                     }
-                    Text("Done: $done", fontWeight = FontWeight.ExtraBold)
+                    Text(done.toString(), fontWeight = FontWeight.ExtraBold)
                 },
                 actions = {
                     IconButton(onClick = onCopyLogs) {
