@@ -51,8 +51,8 @@ class MainActivity : ComponentActivity() {
 
             CompositionLocalProvider(
                 LocalDensity provides Density(
-                    density = systemDensity.density,
-                    fontScale = systemDensity.fontScale * fontScale,
+                    density = systemDensity.density * fontScale,
+                    fontScale = systemDensity.fontScale,
                 ),
             ) {
                 OnePercentTheme(darkTheme = dark) {
