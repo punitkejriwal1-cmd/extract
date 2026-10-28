@@ -14,6 +14,9 @@ import com.onepercent.habits.nativeapp.MainActivity
 import com.onepercent.habits.nativeapp.R
 import com.onepercent.habits.nativeapp.data.HabitEntity
 import java.util.Calendar
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 object NotificationHelper {
     const val CHANNEL_ID = "habits_sticky"
@@ -97,8 +100,26 @@ object NotificationHelper {
         }
     }
 
-    fun scheduleAll(context: Context, habits: List<HabitEntity>) {
-        habits.forEach { schedule(context, it) }
+    fun scheduleAll(context: Context, habits: List<HabitEntity>, completedToday: Set<String> = emptySet()) {
+        val now = Calendar.getInstance()
+        val todayKey = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+        val weekday = now.get(Calendar.DAY_OF_WEEK) - 1
+        habits.forEach { habit ->
+            val selectedDays = reminderDays(habit)
+            val parts = habit.reminderTime.split(":")
+            val hour = parts.getOrNull(0)?.toIntOrNull()
+            val minute = parts.getOrNull(1)?.toIntOrNull()
+            if (weekday in selectedDays && hour != null && minute != null &&
+                (hour < now.get(Calendar.HOUR_OF_DAY) ||
+                    (hour == now.get(Calendar.HOUR_OF_DAY) && minute <= now.get(Calendar.MINUTE))) &&
+                habit.id !in completedToday
+            ) {
+                showSticky(context, habit, todayKey)
+            } else if (habit.id in completedToday) {
+                cancel(context, habit.id, todayKey)
+            }
+            schedule(context, habit)
+        }
     }
 
     fun cancelSchedule(context: Context, habitId: String) {
@@ -116,6 +137,14 @@ object NotificationHelper {
         )
     }
 
+    private fun reminderDays(habit: HabitEntity): Set<Int> {
+        val days = habit.reminderDays.split(",")
+            .mapNotNull { it.trim().toIntOrNull()?.takeIf { d -> d in 0..6 } }
+            .toSet()
+        // Match the previous app: an empty selection falls back to every day.
+        return days.ifEmpty { (0..6).toSet() }
+    }
+
     private fun nextTriggerMillis(habit: HabitEntity): Long? {
         val parts = habit.reminderTime.split(":")
         if (parts.size != 2) return null
@@ -123,11 +152,7 @@ object NotificationHelper {
         val minute = parts[1].toIntOrNull() ?: return null
         if (hour !in 0..23 || minute !in 0..59) return null
 
-        val days = habit.reminderDays.split(",")
-            .mapNotNull { it.trim().toIntOrNull()?.takeIf { d -> d in 0..6 } }
-            .toSet()
-        // An explicitly empty weekday selection means reminders are paused.
-        if (days.isEmpty()) return null
+        val days = reminderDays(habit)
 
         val now = Calendar.getInstance()
         val candidate = Calendar.getInstance().apply {
