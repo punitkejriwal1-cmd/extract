@@ -58,6 +58,14 @@ fun HomeScreen(
     onSettings: () -> Unit,
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
+    val dayCellSize = when (state.dateKeys.size) {
+        1, 2 -> 40.dp
+        3 -> 34.dp
+        4 -> 30.dp
+        5 -> 27.dp
+        6 -> 24.dp
+        else -> 22.dp
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -118,7 +126,7 @@ fun HomeScreen(
                     val d = runCatching { LocalDate.parse(key) }.getOrNull()
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.width(44.dp),
+                        modifier = Modifier.width(dayCellSize),
                     ) {
                         Text(
                             d?.dayOfWeek?.getDisplayName(TextStyle.SHORT, Locale.ENGLISH)?.uppercase().orEmpty(),
@@ -206,7 +214,7 @@ private fun HabitRow(
 }
 
 @Composable
-private fun StatusCell(log: LogEntity?, onClick: () -> Unit) {
+private fun StatusCell(log: LogEntity?, size: androidx.compose.ui.unit.Dp, onClick: () -> Unit) {
     val bg = when (log?.status) {
         "done" -> Color(0xFF34D399)
         "partial" -> Color(0xFFFBBF24)
@@ -228,9 +236,9 @@ private fun StatusCell(log: LogEntity?, onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         when (log?.status) {
-            "done" -> Icon(Icons.Default.Check, null, tint = fg, modifier = Modifier.size(18.dp))
+            "done" -> Icon(Icons.Default.Check, null, tint = fg, modifier = Modifier.size(if (size < 30.dp) 13.dp else 18.dp))
             "missed" -> Icon(Icons.Default.Close, null, tint = fg, modifier = Modifier.size(18.dp))
-            "partial" -> Text("${log.partialPct.coerceAtLeast(10)}%", color = fg, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            "partial" -> Text("${log.partialPct.coerceAtLeast(10)}%", color = fg, fontSize = if (size < 30.dp) 8.sp else 11.sp, fontWeight = FontWeight.Bold)
             else -> Text("·", color = fg)
         }
     }
