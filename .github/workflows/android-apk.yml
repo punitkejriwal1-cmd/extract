@@ -42,6 +42,9 @@ jobs:
           test -f android/gradlew
           test -f native-android/app/build.gradle.kts
 
+      - name: Make Gradle wrapper executable
+        run: chmod +x android/gradlew
+
       - name: Run native unit tests
         run: ./android/gradlew -p native-android testDebugUnitTest --no-daemon --stacktrace
 
