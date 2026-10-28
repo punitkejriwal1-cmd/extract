@@ -17,13 +17,11 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -77,9 +75,12 @@ fun HomeScreen(
                     val done = state.habits.count { h ->
                         state.logsByKey[state.dateKeys.firstOrNull().orEmpty()]?.get(h.id)?.status == "done"
                     }
-                    Text(done.toString(), fontWeight = FontWeight.ExtraBold)
+                    Text("$done/${state.habits.size}", fontWeight = FontWeight.ExtraBold)
                 },
                 actions = {
+                    IconButton(onClick = onAdd) {
+                        Icon(Icons.Default.Add, contentDescription = "Add habit")
+                    }
                     IconButton(onClick = onCopyLogs) {
                         Icon(Icons.Default.ContentCopy, contentDescription = "Copy log")
                     }
@@ -91,11 +92,6 @@ fun HomeScreen(
                     containerColor = MaterialTheme.colorScheme.background,
                 ),
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(onClick = onAdd) {
-                Icon(Icons.Default.Add, contentDescription = "Add habit")
-            }
         },
     ) { padding ->
         Column(
@@ -138,7 +134,7 @@ fun HomeScreen(
                 }
             } else {
                 LazyColumn {
-                    itemsIndexed(state.habits, key = { _, h -> h.id }) { index, habit ->
+                    itemsIndexed(state.habits, key = { _, h -> h.id }) { _, habit ->
                         HabitRow(
                             habit = habit,
                             dateKeys = state.dateKeys,
@@ -171,7 +167,7 @@ private fun HabitRow(
         Modifier
             .fillMaxWidth()
             .clickable(onClick = onEdit)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.width(56.dp)) {
