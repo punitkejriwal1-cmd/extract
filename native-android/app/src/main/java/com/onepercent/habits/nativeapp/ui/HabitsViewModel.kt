@@ -88,6 +88,10 @@ class HabitsViewModel(app: Application) : AndroidViewModel(app) {
         reminderTime: String,
         reminderDays: String,
         color: Long,
+        freqType: String = "daily",
+        freqDays: String = "0,1,2,3,4,5,6",
+        freqNum: Int = 2,
+        freqDates: String = "",
     ) {
         viewModelScope.launch {
             val entity = HabitEntity(
@@ -100,6 +104,10 @@ class HabitsViewModel(app: Application) : AndroidViewModel(app) {
                 reminderDays = reminderDays,
                 color = color,
                 sortKey = startTime,
+                freqType = freqType,
+                freqDays = freqDays,
+                freqNum = freqNum,
+                freqDates = freqDates,
             )
             repo.upsertHabit(entity)
             NotificationHelper.cancel(ctx, entity.id, HabitRepository.dateKey(0))
