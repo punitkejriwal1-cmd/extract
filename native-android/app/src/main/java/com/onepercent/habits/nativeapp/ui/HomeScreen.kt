@@ -74,8 +74,8 @@ fun HomeScreen(
                         Text("Habits", fontWeight = FontWeight.ExtraBold)
                         Spacer(Modifier.width(8.dp))
                         val done = state.habits.count { h ->
-                            state.logsByKey[state.dateKeys.firstOrNull().orEmpty()]?.get(h.id)?.status
-                                in setOf("done", "partial")
+                            (state.logsByKey[state.dateKeys.firstOrNull().orEmpty()]?.get(h.id)?.status)
+                                .let { it == "done" || it == "partial" }
                         }
                         Text(
                             "$done/${state.habits.size}",
