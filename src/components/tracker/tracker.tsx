@@ -120,8 +120,8 @@ export function Tracker() {
       for (const habit of current.habits) {
         const remind = habit.reminderTime || habit.startTime;
         if (!remind || remind !== minute) continue;
-        const days = habit.reminderDays.length ? habit.reminderDays : [0, 1, 2, 3, 4, 5, 6];
-        if (!days.includes(dow)) continue;
+        const days = habit.reminderDays;
+        if (!days.length || !days.includes(dow)) continue;
         if (cellLog(current, today, habit.id)?.status) continue;
         const key = `${today}_${habit.id}_${remind}`;
         if (fired.has(key)) continue;
