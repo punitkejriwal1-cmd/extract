@@ -30,6 +30,12 @@ jobs:
       - name: Install JS dependencies
         run: npm install
 
+      - name: Check TypeScript
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
+
       - name: Build mobile web assets
         run: npm run build:mobile
 
