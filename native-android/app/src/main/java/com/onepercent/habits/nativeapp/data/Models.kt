@@ -15,6 +15,10 @@ data class HabitEntity(
     val reminderDays: String = "0,1,2,3,4,5,6", // CSV of day ints
     val color: Long = 0xFF3B82F6,
     val sortKey: String = startTime,
+    val freqType: String = "daily",
+    val freqDays: String = "0,1,2,3,4,5,6",
+    val freqNum: Int = 2,
+    val freqDates: String = "",
     @ColumnInfo(defaultValue = "'daily'") val freqType: String = "daily",
     @ColumnInfo(defaultValue = "'0,1,2,3,4,5,6'") val freqDays: String = "0,1,2,3,4,5,6",
     @ColumnInfo(defaultValue = "2") val freqNum: Int = 2,
