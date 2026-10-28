@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 data class HomeUiState(
     val habits: List<HabitEntity> = emptyList(),
@@ -121,6 +123,37 @@ class HabitsViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     suspend fun exportJson(): String = repo.exportJson()
+
+    suspend fun exportLogs(fromDate: String, toDate: String): String {
+        val habits = repo.getAllHabits().sortedBy { it.startTime }
+        val logs = repo.getAllLogs().associateBy { it.dateKey to it.habitId }
+        val from = LocalDate.parse(fromDate)
+        val to = LocalDate.parse(toDate)
+        require(!from.isAfter(to)) { "Start date must not be after end date" }
+        val out = StringBuilder()
+        var date = from
+        while (!date.isAfter(to)) {
+            val key = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
+            out.append("Date: ").append(date.format(DateTimeFormatter.ofPattern("EEE, dd MMM yyyy"))).append('\\n')
+            habits.forEach { habit ->
+                val log = logs[key to habit.id]
+                out.append(habit.startTime).append(" | ").append(habit.name).append(" | ")
+                when (log?.status) {
+                    "done" -> out.append("DONE")
+                    "partial" -> out.append("PARTIAL (").append(log.partialPct).append("%)")
+                    "missed" -> out.append("MISSED")
+                    else -> out.append("UNMARKED")
+                }
+                if (habit.question.isNotBlank()) out.append(" | Question: ").append(habit.question)
+                if (!log?.reasons.isNullOrBlank()) out.append(" | Reasons: ").append(log?.reasons)
+                if (!log?.note.isNullOrBlank()) out.append(" | Note: ").append(log?.note)
+                out.append('\\n')
+            }
+            out.append('\\n')
+            date = date.plusDays(1)
+        }
+        return out.toString().trim()
+    }
 
     fun importJson(raw: String, onDone: (Boolean) -> Unit) {
         viewModelScope.launch {
