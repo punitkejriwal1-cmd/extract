@@ -18,6 +18,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -38,6 +39,10 @@ import java.io.File
 fun SettingsScreen(
     dark: Boolean,
     onToggleDark: (Boolean) -> Unit,
+    fontScale: Float,
+    onFontScaleChange: (Float) -> Unit,
+    visibleDays: Int,
+    onVisibleDaysChange: (Int) -> Unit,
     vm: HabitsViewModel,
     onClose: () -> Unit,
 ) {
@@ -92,6 +97,42 @@ fun SettingsScreen(
                     onClick = { onToggleDark(false) },
                     label = { Text("Light") },
                 )
+            }
+
+            Text("Text size", style = MaterialTheme.typography.titleMedium)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text("Habit text")
+                Text("${(fontScale * 100).toInt()}%", color = MaterialTheme.colorScheme.primary)
+            }
+            Slider(
+                value = fontScale.coerceIn(0.6f, 1.0f),
+                onValueChange = onFontScaleChange,
+                valueRange = 0.6f..1.0f,
+                steps = 7,
+            )
+
+            Text("Days on home", style = MaterialTheme.typography.titleMedium)
+            Text(
+                when (visibleDays) {
+                    1 -> "Only today is shown."
+                    else -> "Today and the previous ${visibleDays - 1} day${if (visibleDays == 2) "" else "s"}."
+                },
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                (1..7).forEach { count ->
+                    FilterChip(
+                        selected = visibleDays == count,
+                        onClick = { onVisibleDaysChange(count) },
+                        label = { Text(count.toString()) },
+                    )
+                }
             }
 
             Text("Backup", style = MaterialTheme.typography.titleMedium)
