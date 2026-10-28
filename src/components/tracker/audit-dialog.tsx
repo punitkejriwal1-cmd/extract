@@ -8,6 +8,7 @@ type Mode = "today" | "yesterday" | "range";
 
 export function AuditDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const data = useHabits((s) => s.data);
+  const prefs = useHabits((s) => s.prefs);
   const showToast = useHabits((s) => s.showToast);
   const [mode, setMode] = useState<Mode>("today");
   const [from, setFrom] = useState(() => dateKey(-6));
@@ -16,11 +17,11 @@ export function AuditDialog({ open, onClose }: { open: boolean; onClose: () => v
   const today = dateKey(0);
   const rangeReady = isDateKey(from) && isDateKey(to);
   const text = useMemo(() => {
-    if (mode === "today") return auditText(data, 0);
-    if (mode === "yesterday") return auditText(data, -1);
+    if (mode === "today") return auditText(data, 0, prefs.wakeUpTime, prefs.sleepTime);
+    if (mode === "yesterday") return auditText(data, -1, prefs.wakeUpTime, prefs.sleepTime);
     if (!rangeReady) return "Pick a start and end date.";
-    return auditRange(data, from, to);
-  }, [data, mode, from, to, rangeReady]);
+    return auditRange(data, from, to, prefs.wakeUpTime, prefs.sleepTime);
+  }, [data, prefs.wakeUpTime, prefs.sleepTime, mode, from, to, rangeReady]);
 
   async function copy() {
     try {

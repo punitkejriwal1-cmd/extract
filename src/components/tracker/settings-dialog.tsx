@@ -114,6 +114,14 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
       </section>
 
       <section className="mt-3 space-y-3 rounded-xl bg-chip p-3">
+        <h3 className="text-sm font-bold text-ink">Daily schedule</h3>
+        <p className="text-sm text-pretty text-muted">The timeline begins at Wake-up and ends at Sleep. Default: 5:00 am–9:00 pm.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block min-w-0"><span className="mb-1 block text-xs font-bold tracking-wide text-muted uppercase">Wake-up</span><input type="time" value={prefs.wakeUpTime} className="field font-mono font-bold" onChange={(e)=>setPrefs({wakeUpTime:e.target.value})}/></label>
+          <label className="block min-w-0"><span className="mb-1 block text-xs font-bold tracking-wide text-muted uppercase">Sleep</span><input type="time" value={prefs.sleepTime} className="field font-mono font-bold" onChange={(e)=>setPrefs({sleepTime:e.target.value})}/></label>
+        </div>
+      </section>
+      <section className="mt-3 space-y-3 rounded-xl bg-chip p-3">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-sm font-bold text-ink">Text size</h3>
           <span className="font-mono text-xs font-bold text-accent tabular-nums">{percent}%</span>

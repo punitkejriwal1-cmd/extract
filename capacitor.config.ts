@@ -8,7 +8,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
  */
 const config: CapacitorConfig = {
   appId: "com.onepercent.habits",
-  appName: "1% Habits",
+  appName: "Timetable",
   webDir: "dist-mobile",
   server: {
     // Uncomment for live-reload against a local dev server while developing:
@@ -20,6 +20,7 @@ const config: CapacitorConfig = {
     backgroundColor: "#0f1115",
   },
   plugins: {
+    Keyboard: { resize: "body" },
     SplashScreen: {
       launchAutoHide: true,
       backgroundColor: "#0f1115",

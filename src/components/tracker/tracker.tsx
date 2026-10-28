@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { App } from "@capacitor/app";
 import { Check, ClipboardList, Plus, Settings, X } from "lucide-react";
 import { AuditDialog } from "@/components/tracker/audit-dialog";
 import { HabitDialog } from "@/components/tracker/habit-dialog";
@@ -13,7 +14,6 @@ import {
   colorForHabit,
   dateKey,
   dismissSticky,
-  durationLabel,
   format12,
   notifyHabit,
   now24,
@@ -35,6 +35,17 @@ export function Tracker() {
   const [creating, setCreating] = useState(false);
   const [auditOpen, setAuditOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  useEffect(() => {
+    let handle: { remove: () => Promise<void> } | undefined;
+    void App.addListener("backButton", () => {
+      if (status) setStatus(null);
+      else if (editingId || creating) { setEditingId(null); setCreating(false); }
+      else if (auditOpen) setAuditOpen(false);
+      else if (settingsOpen) setSettingsOpen(false);
+      else void App.exitApp();
+    }).then((listener) => { handle = listener; });
+    return () => { void handle?.remove(); };
+  }, [status, editingId, creating, auditOpen, settingsOpen]);
 
   useEffect(() => {
     document.documentElement.style.setProperty("--habit-scale", String(prefs.fontScale));
@@ -138,6 +149,7 @@ export function Tracker() {
   const today = dateKey(0);
   const columns = Array.from({ length: prefs.visibleDays }, (_, index) => dateKey(-index));
   const track = columnTrack(prefs.visibleDays, prefs.fontScale);
+  const timeline = buildTimeline(habits, prefs.wakeUpTime, prefs.sleepTime);
   const scored = habits.filter((h) => {
     const log = cellLog(data, today, h.id);
     return log?.status === "done" || log?.status === "partial";
@@ -149,8 +161,7 @@ export function Tracker() {
         <div className="flex items-center justify-between gap-2 px-3 py-2">
           <div className="flex min-w-0 items-center gap-2">
             <div className="flex items-baseline gap-1">
-              <span className="font-mono text-sm font-bold text-accent">1%</span>
-              <h1 className="text-sm font-extrabold tracking-tight text-ink">Habits</h1>
+              <h1 className="text-sm font-extrabold tracking-tight text-ink">Timetable</h1>
             </div>
             <span className="rounded-full bg-chip px-2 py-0.5 font-mono text-xs font-semibold text-muted tabular-nums">
               {scored}/{habits.length}
@@ -185,64 +196,16 @@ export function Tracker() {
         </div>
       </header>
 
-      <main className="safe-bottom flex-1">
-        {habits.length === 0 ? (
-          <div className="px-6 py-16 text-center">
-            <p className="text-base font-bold text-ink">No habits yet</p>
-            <p className="mt-1 text-sm text-muted">Add the first one with the plus in the top bar.</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-line/60">
-            {habits.map((habit, index) => {
-              const dur = durationLabel(habit.startTime, habit.endTime);
-              const pill = colorForHabit(habit, index);
-              const end = habit.endTime ? format12(habit.endTime) : "";
-              return (
-                <div key={habit.id} className="flex items-stretch gap-2 px-3 py-3">
-                  <div className="flex w-[4.5rem] shrink-0 flex-col pt-1 leading-tight">
-                    <span className="text-xs font-semibold text-muted tabular-nums">
-                      {format12(habit.startTime)}
-                    </span>
-                    {end ? (
-                      <span className="text-[11px] font-medium text-muted/80 tabular-nums">{end}</span>
-                    ) : null}
-                  </div>
-                  <button
-                    type="button"
-                    className="min-w-0 flex-1 text-left"
-                    onClick={() => setEditingId(habit.id)}
-                  >
-                    <span
-                      className="inline-flex max-w-full items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold text-white shadow-sm"
-                      style={{ backgroundColor: pill }}
-                    >
-                      <span className="truncate">{habit.name}</span>
-                    </span>
-                    {dur ? (
-                      <div className="mt-1.5 pl-1 text-xs font-medium text-muted tabular-nums">{dur}</div>
-                    ) : null}
-                  </button>
-                  <div className="grid shrink-0 self-center" style={track.style}>
-                    {columns.map((key) => {
-                      const log = cellLog(data, key, habit.id);
-                      return (
-                        <Cell
-                          key={key}
-                          status={log?.status ?? null}
-                          pct={log?.partialPct}
-                          size={track.cell}
-                          label={`${habit.name} on ${key}`}
-                          onClick={() => setStatus({ dateKey: key, habitId: habit.id })}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </main>
+      <main className="safe-bottom min-h-0 flex-1 overflow-y-auto"><div className="divide-y divide-line/60">
+        {timeline.map((row) => {
+          if (row.kind === "marker") return <div key={row.key} className="flex items-center gap-2 px-3 py-3"><div className="w-[4.5rem] shrink-0 text-xs font-semibold text-muted tabular-nums">{format12(row.time)}</div><div className="min-w-0 flex-1 rounded-lg border border-line bg-chip px-3 py-2 text-sm font-extrabold text-ink">{row.label}</div><div className="shrink-0" style={track.style} aria-hidden="true" /></div>;
+          if (row.kind === "gap") return <div key={row.key} className="flex items-center gap-2 px-3 py-2"><div className="w-[4.5rem] shrink-0 text-xs font-semibold text-muted tabular-nums">{format12(row.start)}</div><div className="min-w-0 flex-1 rounded-lg border border-dashed border-line bg-chip/50 px-3 py-2 text-xs font-semibold text-muted">{row.duration}</div><div className="shrink-0" style={track.style} aria-hidden="true" /></div>;
+          const habit=row.habit, pill=colorForHabit(habit,row.index);
+          return <div key={habit.id} className="flex items-center gap-2 px-3 py-3"><div className="w-[4.5rem] shrink-0 text-xs font-semibold text-muted tabular-nums">{format12(habit.startTime)}</div><button type="button" className="min-w-0 flex-1 text-left" onClick={()=>setEditingId(habit.id)}><span className="inline-flex max-w-full items-center rounded-lg px-3 py-2 text-sm font-bold shadow-sm" style={{backgroundColor:pill,color:pill==="#ffff00"?"#111827":"#ffffff"}}><span className="truncate">{habit.name}</span></span></button><div className="grid shrink-0 self-center" style={track.style}>{columns.map((key)=>{const log=cellLog(data,key,habit.id);return <Cell key={key} status={log?.status??null} pct={log?.partialPct} size={track.cell} label={`${habit.name} on ${key}`} onClick={()=>setStatus({dateKey:key,habitId:habit.id})}/>})}</div></div>;
+        })}
+        <div className="flex items-center gap-2 px-3 py-3"><div className="w-[4.5rem] shrink-0 text-xs font-semibold text-muted tabular-nums">{format12(prefs.sleepTime)}</div><div className="min-w-0 flex-1 rounded-lg border border-line bg-chip px-3 py-2 text-sm font-extrabold text-ink">Sleep</div><div className="shrink-0" style={track.style} aria-hidden="true"/></div>
+        {habits.length===0?<p className="px-6 py-6 text-center text-sm text-muted">No tasks yet. Tap + to add your first task.</p>:null}
+      </div></main>
 
       <StatusDialog
         dateKey={status?.dateKey ?? null}
@@ -272,6 +235,17 @@ export function Tracker() {
   );
 }
 
+type TimelineRow = {kind:"marker";key:string;time:string;label:string}|{kind:"gap";key:string;start:string;duration:string}|{kind:"habit";habit:import("@/lib/habits").Habit;index:number};
+function minuteOfDay(time:string):number {const [h,m]=time.split(":").map(Number);return (h||0)*60+(m||0)}
+function timeAt(total:number):string {const v=Math.max(0,Math.min(1439,total));return `${String(Math.floor(v/60)).padStart(2,"0")}:${String(v%60).padStart(2,"0")}`}
+function emptyDuration(start:number,end:number):string {const total=Math.max(0,end-start),hours=Math.floor(total/60),mins=total%60;if(hours&&mins)return `${hours} h ${mins} min`;if(hours)return `${hours} h`;return `${mins} min`}
+function buildTimeline(habits:import("@/lib/habits").Habit[],wake:string,sleep:string):TimelineRow[] {
+ const startDay=minuteOfDay(wake),sleepValue=minuteOfDay(sleep),endDay=sleepValue>startDay?sleepValue:21*60;
+ const tasks=habits.map(habit=>({habit,start:minuteOfDay(habit.startTime)})).filter(x=>x.start>=startDay&&x.start<endDay).sort((a,b)=>a.start-b.start);
+ const rows:TimelineRow[]=[{kind:"marker",key:"wake-up",time:wake,label:"Wake-up"}];let cursor=startDay;
+ tasks.forEach((item,index)=>{if(item.start>cursor)rows.push({kind:"gap",key:`gap-${cursor}`,start:timeAt(cursor),duration:emptyDuration(cursor,item.start)});rows.push({kind:"habit",habit:item.habit,index});const next=tasks[index+1]?.start??endDay;let end=item.habit.endTime?minuteOfDay(item.habit.endTime):next;if(end<=item.start)end+=1440;cursor=Math.max(cursor,Math.min(endDay,end))});
+ if(cursor<endDay)rows.push({kind:"gap",key:`gap-${cursor}`,start:timeAt(cursor),duration:emptyDuration(cursor,endDay)});return rows;
+}
 function columnTrack(days: number, scale: number) {
   const base = days <= 4 ? 44 : days === 5 ? 40 : days === 6 ? 36 : 32;
   const floor = days >= 6 ? 28 : 34;

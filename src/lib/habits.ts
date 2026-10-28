@@ -10,10 +10,12 @@ export const PREFS_KEY = "one_percent_prefs_v1";
 export type DisplayPrefs = {
   fontScale: number;
   visibleDays: number;
+  wakeUpTime: string;
+  sleepTime: string;
 };
 
 export function defaultPrefs(): DisplayPrefs {
-  return { fontScale: 1, visibleDays: 4 };
+  return { fontScale: 1, visibleDays: 4, wakeUpTime: "05:00", sleepTime: "21:00" };
 }
 
 export function clampPrefs(prefs: Partial<DisplayPrefs> | null | undefined): DisplayPrefs {
@@ -22,6 +24,8 @@ export function clampPrefs(prefs: Partial<DisplayPrefs> | null | undefined): Dis
   return {
     fontScale: Number.isFinite(fontScale) ? Math.min(1, Math.max(0.6, fontScale)) : 1,
     visibleDays: Number.isFinite(visibleDays) ? Math.min(7, Math.max(1, Math.round(visibleDays))) : 4,
+    wakeUpTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(prefs?.wakeUpTime ?? "") ? prefs!.wakeUpTime! : "05:00",
+    sleepTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(prefs?.sleepTime ?? "") ? prefs!.sleepTime! : "21:00",
   };
 }
 
@@ -92,19 +96,8 @@ export type AppData = {
 
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
 
-const PILL_COLORS = [
-  "#3b82f6",
-  "#ec4899",
-  "#a78b6d",
-  "#22c55e",
-  "#64748b",
-  "#8b5cf6",
-  "#f59e0b",
-  "#06b6d4",
-];
-
-export function colorForHabit(h: Habit, index: number): string {
-  if (h.color) return h.color;
+const PILL_COLORS = ["#ff0000", "#ff7f00", "#ffff00", "#00a550", "#0000ff", "#4b0082", "#8f00ff"];
+export function colorForHabit(_h: Habit, index: number): string {
   return PILL_COLORS[index % PILL_COLORS.length];
 }
 
@@ -303,27 +296,31 @@ export function cellLog(data: AppData, key: string, habitId: string): CellLog | 
   return data.logs[key]?.[habitId] ?? null;
 }
 
-export function auditForDate(data: AppData, key: string): string {
-  const lines = sortedHabits(data).map((h) => {
-    const time = format12(h.startTime);
-    const log = cellLog(data, key, h.id);
-    if (!log?.status) return `${time} | ${h.name} | UNMARKED`;
-    if (log.status === "done") return `${time} | ${h.name} | DONE`;
-    if (log.status === "partial") {
-      const reasons = log.reasons?.length ? ` | ${log.reasons.join(", ")}` : "";
-      const note = log.note ? ` | ${log.note}` : "";
-      return `${time} | ${h.name} | PARTIAL (${log.partialPct || 50}%)${reasons}${note}`;
-    }
-    const reasons = log.reasons?.length ? ` | ${log.reasons.join(", ")}` : "";
-    const note = log.note ? ` | ${log.note}` : "";
-    return `${time} | ${h.name} | MISSED${reasons}${note}`;
+function minuteValue(time: string): number { const [h,m] = time.split(":").map(Number); return (h || 0) * 60 + (m || 0); }
+function emptyBlockText(start: number, end: number): string {
+  const total = Math.max(0,end-start), h = Math.floor(total/60), m = total%60;
+  if (h && m) return `${h} h ${m} min`; if (h) return `${h} h`; return `${m} min`;
+}
+function timeString(total: number): string { const v=Math.max(0,Math.min(1439,total)); return `${String(Math.floor(v/60)).padStart(2,"0")}:${String(v%60).padStart(2,"0")}`; }
+export function auditForDate(data: AppData, key: string, wakeUpTime = "05:00", sleepTime = "21:00"): string {
+  const wake=minuteValue(wakeUpTime), sleep=minuteValue(sleepTime)>wake?minuteValue(sleepTime):21*60;
+  const tasks=sortedHabits(data).filter(h=>minuteValue(h.startTime)>=wake&&minuteValue(h.startTime)<sleep);
+  const lines=[`${format12(wakeUpTime)} | Wake-up`]; let cursor=wake;
+  tasks.forEach((h,index)=>{
+    const start=minuteValue(h.startTime);
+    if(start>cursor) lines.push(`${format12(timeString(cursor))} | EMPTY | ${emptyBlockText(cursor,start)}`);
+    const log=cellLog(data,key,h.id);
+    const status=!log?.status?"UNMARKED":log.status==="done"?"DONE":log.status==="partial"?`PARTIAL (${log.partialPct||50}%)`:"MISSED";
+    const reasons=log?.reasons?.length?` | ${log.reasons.join(", ")}`:"", note=log?.note?` | ${log.note}`:"";
+    lines.push(`${format12(h.startTime)} | ${h.name} | ${status}${reasons}${note}`);
+    const next=tasks[index+1]?minuteValue(tasks[index+1].startTime):sleep; let end=h.endTime?minuteValue(h.endTime):next;
+    if(end<=start) end+=1440; cursor=Math.max(cursor,Math.min(sleep,end));
   });
-  return [`Date: ${humanDate(key)}`, ...lines].join("\n");
+  if(cursor<sleep) lines.push(`${format12(timeString(cursor))} | EMPTY | ${emptyBlockText(cursor,sleep)}`);
+  lines.push(`${format12(sleepTime)} | Sleep`);
+  return [`Date: ${humanDate(key)}`,...lines].join("\n");
 }
-
-export function auditText(data: AppData, dayOffset = 0): string {
-  return auditForDate(data, dateKey(dayOffset));
-}
+export function auditText(data: AppData, dayOffset=0, wakeUpTime="05:00", sleepTime="21:00"): string { return auditForDate(data,dateKey(dayOffset),wakeUpTime,sleepTime);}
 
 function shiftKey(key: string, days: number): string {
   const [y, m, d] = key.split("-").map(Number);
@@ -334,14 +331,14 @@ function shiftKey(key: string, days: number): string {
   return `${yr}-${mo}-${da}`;
 }
 
-export function auditRange(data: AppData, fromKey: string, toKey: string): string {
+export function auditRange(data: AppData, fromKey: string, toKey: string, wakeUpTime="05:00", sleepTime="21:00"): string {
   let start = fromKey <= toKey ? fromKey : toKey;
   const end = fromKey <= toKey ? toKey : fromKey;
   const chunks: string[] = [];
   const limit = 62;
   let truncated = false;
   for (let i = 0; i < limit && start <= end; i += 1) {
-    chunks.push(auditForDate(data, start));
+    chunks.push(auditForDate(data, start, wakeUpTime, sleepTime));
     const next = shiftKey(start, 1);
     if (i === limit - 1 && next <= end) truncated = true;
     start = next;
