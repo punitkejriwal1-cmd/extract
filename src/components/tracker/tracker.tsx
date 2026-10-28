@@ -10,14 +10,16 @@ import { useHabits } from "@/lib/habit-store";
 import {
   THEME_KEY,
   cellLog,
+  colorForHabit,
   dateKey,
   dismissSticky,
+  durationLabel,
+  format12,
   notifyHabit,
   now24,
   registerHabitWorker,
   scheduleAllHabitNotifications,
   sortedHabits,
-  timeRangeLabel,
   weekdayParts,
   type HabitStatus,
 } from "@/lib/habits";
@@ -51,6 +53,15 @@ export function Tracker() {
     if (!ready) return;
     void scheduleAllHabitNotifications(data);
   }, [ready, data.habits]);
+
+  // Re-apply sticky notifications every minute (covers swipe-away on Realme)
+  useEffect(() => {
+    if (!ready) return;
+    const id = window.setInterval(() => {
+      void scheduleAllHabitNotifications(useHabits.getState().data);
+    }, 60_000);
+    return () => window.clearInterval(id);
+  }, [ready]);
 
   useEffect(() => {
     if (!ready) return;
@@ -110,11 +121,12 @@ export function Tracker() {
       const minute = now24();
       const current = useHabits.getState().data;
       for (const habit of current.habits) {
-        if (!habit.time || habit.time !== minute) continue;
+        const remind = habit.reminderTime || habit.startTime;
+        if (!remind || remind !== minute) continue;
         const days = habit.reminderDays.length ? habit.reminderDays : [0, 1, 2, 3, 4, 5, 6];
         if (!days.includes(dow)) continue;
         if (cellLog(current, today, habit.id)?.status) continue;
-        const key = `${today}_${habit.id}_${habit.time}`;
+        const key = `${today}_${habit.id}_${remind}`;
         if (fired.has(key)) continue;
         fired.add(key);
         void notifyHabit(habit);
@@ -136,7 +148,6 @@ export function Tracker() {
   const today = dateKey(0);
   const columns = Array.from({ length: prefs.visibleDays }, (_, index) => dateKey(-index));
   const track = columnTrack(prefs.visibleDays, prefs.fontScale);
-  const compact = prefs.fontScale < 0.8;
   const scored = habits.filter((h) => {
     const log = cellLog(data, today, h.id);
     return log?.status === "done" || log?.status === "partial";
@@ -171,7 +182,8 @@ export function Tracker() {
           </div>
         </div>
         <div className="flex items-center justify-between gap-2 px-3 pb-2 text-xs font-bold text-muted">
-          <span>Habit</span>
+          <span className="w-16 shrink-0">Time</span>
+          <span className="flex-1">Habit</span>
           <div className="grid shrink-0 text-center" style={track.style}>
             {columns.map((key, index) => {
               const parts = weekdayParts(key);
@@ -186,69 +198,58 @@ export function Tracker() {
         </div>
       </header>
 
-      <main className="safe-bottom flex-1 divide-y divide-line">
+      <main className="safe-bottom flex-1">
         {habits.length === 0 ? (
           <div className="px-6 py-16 text-center">
             <p className="text-base font-bold text-ink">No habits yet</p>
             <p className="mt-1 text-sm text-muted">Add the first one with the plus in the top bar.</p>
           </div>
         ) : (
-          habits.map((habit) => {
-            const todayLog = cellLog(data, today, habit.id);
-            const showWhy =
-              !compact &&
-              todayLog &&
-              (todayLog.status === "partial" || todayLog.status === "missed") &&
-              ((todayLog.reasons && todayLog.reasons.length > 0) || todayLog.note);
-            return (
-              <div key={habit.id} className="habit-row flex items-center gap-2 px-3">
-                <button
-                  type="button"
-                  className="min-w-0 flex-1 pr-1 text-left"
-                  onClick={() => setEditingId(habit.id)}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="habit-time shrink-0 rounded-md bg-chip px-1.5 py-0.5 font-mono font-bold text-ink">
-                      {timeRangeLabel(habit)}
+          <div className="divide-y divide-line/60">
+            {habits.map((habit, index) => {
+              const dur = durationLabel(habit.startTime, habit.endTime);
+              const pill = colorForHabit(habit, index);
+              return (
+                <div key={habit.id} className="flex items-stretch gap-2 px-3 py-3">
+                  <div className="flex w-16 shrink-0 flex-col pt-1">
+                    <span className="text-xs font-semibold text-muted tabular-nums">
+                      {format12(habit.startTime)}
                     </span>
-                    <span className="habit-name truncate font-bold text-ink">{habit.name}</span>
                   </div>
-                  {showWhy ? (
-                    <div className="mt-1 flex flex-wrap items-center gap-1">
-                      {(todayLog.reasons ?? []).map((reason) => (
-                        <span
-                          key={reason}
-                          className="habit-meta rounded bg-missed/10 px-1.5 py-0.5 font-bold text-missed"
-                        >
-                          {reason}
-                        </span>
-                      ))}
-                      {todayLog.note ? (
-                        <span className="habit-meta max-w-40 truncate text-muted italic">
-                          “{todayLog.note}”
-                        </span>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </button>
-                <div className="grid shrink-0" style={track.style}>
-                  {columns.map((key) => {
-                    const log = cellLog(data, key, habit.id);
-                    return (
-                      <Cell
-                        key={key}
-                        status={log?.status ?? null}
-                        pct={log?.partialPct}
-                        size={track.cell}
-                        label={`${habit.name} on ${key}`}
-                        onClick={() => setStatus({ dateKey: key, habitId: habit.id })}
-                      />
-                    );
-                  })}
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 text-left"
+                    onClick={() => setEditingId(habit.id)}
+                  >
+                    <span
+                      className="inline-flex max-w-full items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold text-white shadow-sm"
+                      style={{ backgroundColor: pill }}
+                    >
+                      <span className="truncate">{habit.name}</span>
+                    </span>
+                    {dur ? (
+                      <div className="mt-1.5 pl-1 text-xs font-medium text-muted tabular-nums">{dur}</div>
+                    ) : null}
+                  </button>
+                  <div className="grid shrink-0 self-center" style={track.style}>
+                    {columns.map((key) => {
+                      const log = cellLog(data, key, habit.id);
+                      return (
+                        <Cell
+                          key={key}
+                          status={log?.status ?? null}
+                          pct={log?.partialPct}
+                          size={track.cell}
+                          label={`${habit.name} on ${key}`}
+                          onClick={() => setStatus({ dateKey: key, habitId: habit.id })}
+                        />
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            );
-          })
+              );
+            })}
+          </div>
         )}
       </main>
 

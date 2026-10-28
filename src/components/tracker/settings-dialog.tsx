@@ -1,10 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Sheet } from "@/components/tracker/sheet";
 import { cn } from "@/lib/cn";
 import { useHabits } from "@/lib/habit-store";
 import {
-  copyText,
-  exportDataJson,
+  exportHabitsFile,
   importDataJson,
   scheduleAllHabitNotifications,
 } from "@/lib/habits";
@@ -16,45 +15,50 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
   const prefs = useHabits((s) => s.prefs);
   const setPrefs = useHabits((s) => s.setPrefs);
   const showToast = useHabits((s) => s.showToast);
-  const [importOpen, setImportOpen] = useState(false);
-  const [importText, setImportText] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
 
   const percent = Math.round(prefs.fontScale * 100);
   const previous = prefs.visibleDays - 1;
 
   async function handleExport() {
-    const json = exportDataJson(data);
-    const ok = await copyText(json);
-    if (ok) {
-      showToast("Backup copied — paste into Notes or Files to save");
-    } else {
-      // last resort: show text so user can long-press copy
-      setImportText(json);
-      setImportOpen(true);
-      showToast("Select all text below and copy it");
+    setBusy(true);
+    try {
+      const ok = await exportHabitsFile(data);
+      showToast(ok ? "Share sheet opened — save the JSON file" : "Export failed");
+    } finally {
+      setBusy(false);
     }
   }
 
-  async function handleImport() {
-    const raw = importText.trim();
-    if (!raw) {
-      showToast("Paste your backup text first");
-      return;
+  function handleImportClick() {
+    fileRef.current?.click();
+  }
+
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setBusy(true);
+    try {
+      const text = await file.text();
+      const imported = importDataJson(text);
+      if (!imported) {
+        showToast("Invalid JSON file");
+        return;
+      }
+      useHabits.getState().mutate((d) => {
+        d.habits = imported.habits;
+        d.logs = imported.logs;
+        d.reasonsList = imported.reasonsList;
+      });
+      await scheduleAllHabitNotifications(imported);
+      showToast(`Imported ${imported.habits.length} habits`);
+    } catch {
+      showToast("Import failed");
+    } finally {
+      setBusy(false);
     }
-    const imported = importDataJson(raw);
-    if (!imported) {
-      showToast("Invalid backup — check the text");
-      return;
-    }
-    useHabits.getState().mutate((d) => {
-      d.habits = imported.habits;
-      d.logs = imported.logs;
-      d.reasonsList = imported.reasonsList;
-    });
-    await scheduleAllHabitNotifications(imported);
-    setImportOpen(false);
-    setImportText("");
-    showToast(`Imported ${imported.habits.length} habits`);
   }
 
   return (
@@ -70,9 +74,6 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
           <h3 className="text-sm font-bold text-ink">Text size</h3>
           <span className="font-mono text-xs font-bold text-accent tabular-nums">{percent}%</span>
         </div>
-        <p className="text-sm text-pretty text-muted">
-          Shrink habit text so a longer list still fits in one screenshot.
-        </p>
         <input
           type="range"
           min={60}
@@ -83,10 +84,6 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
           className="w-full"
           onChange={(e) => setPrefs({ fontScale: Number(e.target.value) / 100 })}
         />
-        <div className="flex items-center justify-between text-xs font-bold text-muted">
-          <span>Smaller</span>
-          <span>Default</span>
-        </div>
       </section>
 
       <section className="mt-3 space-y-3 rounded-xl bg-chip p-3">
@@ -107,7 +104,6 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
                 key={count}
                 type="button"
                 aria-pressed={active}
-                aria-label={`Show ${count} day${count === 1 ? "" : "s"}`}
                 onClick={() => setPrefs({ visibleDays: count })}
                 className={cn(
                   "min-h-11 rounded-lg border text-sm font-extrabold",
@@ -122,60 +118,35 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
       </section>
 
       <section className="mt-3 space-y-3 rounded-xl bg-chip p-3">
-        <h3 className="text-sm font-bold text-ink">Backup</h3>
+        <h3 className="text-sm font-bold text-ink">Backup file</h3>
         <p className="text-sm text-pretty text-muted">
-          Before updating the app, tap Export. Your habits are copied so you can paste them into Notes or a file. After
-          installing the new APK, open Import, paste the text, and restore.
+          Export creates a JSON file you can save. Import restores habits from that file after an update.
         </p>
         <div className="flex gap-2">
           <button
             type="button"
-            className="min-h-11 flex-1 rounded-xl bg-accent text-sm font-bold text-accent-fg"
+            disabled={busy}
+            className="min-h-11 flex-1 rounded-xl bg-accent text-sm font-bold text-accent-fg disabled:opacity-50"
             onClick={() => void handleExport()}
           >
-            Export (copy)
+            Export JSON
           </button>
           <button
             type="button"
-            className="min-h-11 flex-1 rounded-xl bg-partial text-sm font-bold text-partial-fg"
-            onClick={() => {
-              setImportText("");
-              setImportOpen(true);
-            }}
+            disabled={busy}
+            className="min-h-11 flex-1 rounded-xl bg-partial text-sm font-bold text-partial-fg disabled:opacity-50"
+            onClick={handleImportClick}
           >
-            Import (paste)
+            Import JSON
           </button>
         </div>
-        {importOpen ? (
-          <div className="space-y-2">
-            <textarea
-              rows={6}
-              value={importText}
-              placeholder="Paste your backup JSON here"
-              className="w-full rounded-xl border border-line bg-raised px-3 py-2 font-mono text-xs text-ink outline-none focus:ring-2 focus:ring-accent"
-              onChange={(e) => setImportText(e.target.value)}
-            />
-            <div className="flex gap-2">
-              <button
-                type="button"
-                className="min-h-11 flex-1 rounded-xl bg-chip text-sm font-bold text-muted"
-                onClick={() => {
-                  setImportOpen(false);
-                  setImportText("");
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="min-h-11 flex-1 rounded-xl bg-accent text-sm font-bold text-accent-fg"
-                onClick={() => void handleImport()}
-              >
-                Restore
-              </button>
-            </div>
-          </div>
-        ) : null}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="application/json,.json,text/plain"
+          className="hidden"
+          onChange={(e) => void handleImportFile(e)}
+        />
       </section>
     </Sheet>
   );

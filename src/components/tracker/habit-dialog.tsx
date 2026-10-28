@@ -39,7 +39,9 @@ export function HabitDialog({
       found
         ? {
             ...found,
+            startTime: found.startTime || found.reminderTime || "09:00",
             endTime: found.endTime || "",
+            reminderTime: found.reminderTime || found.startTime || "09:00",
             freqDays: [...found.freqDays],
             freqDates: [...found.freqDates],
             reminderDays: [...found.reminderDays],
@@ -67,7 +69,9 @@ export function HabitDialog({
       id: draft.id || `h-${Date.now()}`,
       name,
       question: draft.question.trim(),
+      startTime: draft.startTime,
       endTime: draft.endTime || "",
+      reminderTime: draft.reminderTime || draft.startTime,
       freqNum: Math.min(31, Math.max(1, Number(draft.freqNum) || 2)),
       sticky: true,
     });
@@ -107,22 +111,22 @@ export function HabitDialog({
           <input
             maxLength={65}
             value={draft.question}
-            placeholder="Completed 90 mins without the phone?"
+            placeholder="Completed without the phone?"
             className="field"
             onChange={(e) => setDraft((d) => ({ ...d, question: e.target.value }))}
           />
         </Field>
 
         <section className="space-y-3 rounded-xl border border-line bg-chip/60 p-3">
-          <div className="text-xs font-bold tracking-wide text-muted uppercase">Time period</div>
+          <div className="text-xs font-bold tracking-wide text-muted uppercase">Session time (for display)</div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Starts">
               <input
                 type="time"
                 required
-                value={draft.time}
+                value={draft.startTime}
                 className="field font-mono font-bold"
-                onChange={(e) => setDraft((d) => ({ ...d, time: e.target.value }))}
+                onChange={(e) => setDraft((d) => ({ ...d, startTime: e.target.value }))}
               />
             </Field>
             <Field label="Ends">
@@ -134,11 +138,36 @@ export function HabitDialog({
               />
             </Field>
           </div>
-          <p className="text-xs text-muted">Shown on the home screen. Reminder fires at the start time.</p>
+          <p className="text-xs text-muted">Shown on the home timeline. Not used for the alarm.</p>
         </section>
 
         <section className="space-y-3 rounded-xl border border-line bg-chip/60 p-3">
-          <Field label="Frequency">
+          <div className="text-xs font-bold tracking-wide text-muted uppercase">Reminder</div>
+          <Field label="Remind me at">
+            <input
+              type="time"
+              required
+              value={draft.reminderTime}
+              className="field font-mono font-bold"
+              onChange={(e) => setDraft((d) => ({ ...d, reminderTime: e.target.value }))}
+            />
+          </Field>
+          <p className="text-xs text-muted">
+            Choose any time — start, middle, or end of the session. Notification fires only at this time.
+          </p>
+          <div>
+            <div className="mb-2 text-xs font-bold tracking-wide text-muted uppercase">Reminder days</div>
+            <DayRow
+              days={draft.reminderDays}
+              labels={["S", "M", "T", "W", "T", "F", "S"]}
+              tone="partial"
+              onToggle={(day) => toggleDay("reminderDays", day)}
+            />
+          </div>
+        </section>
+
+        <section className="space-y-3 rounded-xl border border-line bg-chip/60 p-3">
+          <Field label="How often">
             <select
               className="field font-bold"
               value={draft.freqType}
@@ -217,16 +246,6 @@ export function HabitDialog({
               </div>
             </div>
           ) : null}
-        </section>
-
-        <section className="space-y-3 rounded-xl border border-line bg-chip/60 p-3">
-          <div className="text-xs font-bold tracking-wide text-muted uppercase">Reminder days</div>
-          <DayRow
-            days={draft.reminderDays}
-            labels={["S", "M", "T", "W", "T", "F", "S"]}
-            tone="partial"
-            onToggle={(day) => toggleDay("reminderDays", day)}
-          />
         </section>
 
         <div className="flex gap-2">
