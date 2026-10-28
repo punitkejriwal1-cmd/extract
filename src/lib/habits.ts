@@ -1,9 +1,9 @@
+import { LocalNotifications } from "@capacitor/local-notifications";
+
 export const STORAGE_KEY = "one_percent_loop_v3";
 export const LEGACY_KEY = "one_percent_loop_v2";
 export const THEME_KEY = "one_percent_theme_v2";
 export const PREFS_KEY = "one_percent_prefs_v1";
-
-import { LocalNotifications } from "@capacitor/local-notifications";
 
 export type DisplayPrefs = {
   fontScale: number;
@@ -361,7 +361,7 @@ export async function ensureNotificationPermission(): Promise<boolean> {
   }
 }
 
-/** Show a sticky notification immediately (used by Test or when time matches while open) */
+/** Show a sticky notification immediately */
 export async function notifyHabit(habitItem: Habit): Promise<boolean> {
   try {
     const ok = await ensureNotificationPermission();
@@ -399,7 +399,7 @@ export async function notifyHabit(habitItem: Habit): Promise<boolean> {
   }
 }
 
-/** Schedule sticky notifications for all habits that still need a mark today (or next occurrence) */
+/** Schedule sticky notifications for all habits that still need a mark */
 export async function scheduleAllHabitNotifications(data: AppData): Promise<void> {
   try {
     const ok = await ensureNotificationPermission();
@@ -422,7 +422,6 @@ export async function scheduleAllHabitNotifications(data: AppData): Promise<void
     for (const h of data.habits) {
       if (!h.time) continue;
       const days = h.reminderDays?.length ? h.reminderDays : ALL_DAYS;
-      // If already marked today, skip
       if (cellLog(data, today, h.id)?.status) continue;
 
       const t = parseTime(h.time);
@@ -431,10 +430,8 @@ export async function scheduleAllHabitNotifications(data: AppData): Promise<void
       const fire = nextFireDate(h.time);
       if (!fire) continue;
 
-      // If next fire is tomorrow, only schedule if that weekday is allowed
       const fireDow = fire.getDay();
       if (!days.includes(fireDow)) continue;
-      // Also allow if it is still today and today is allowed
       if (fire.toDateString() === new Date().toDateString() && !days.includes(dow)) continue;
 
       const dayKey =
@@ -458,7 +455,6 @@ export async function scheduleAllHabitNotifications(data: AppData): Promise<void
 
     if (notifications.length === 0) return;
 
-    // Cancel previous ones for these ids then reschedule
     await LocalNotifications.cancel({
       notifications: notifications.map((n) => ({ id: n.id })),
     }).catch(() => undefined);
@@ -474,14 +470,12 @@ export async function dismissSticky(habitId: string, date: string) {
   try {
     const id = habitNotificationId(habitId, date);
     await LocalNotifications.cancel({ notifications: [{ id }] });
-    // Also try removing from delivered shade
     await LocalNotifications.removeDeliveredNotifications({
       notifications: [{ id, title: "", body: "", schedule: { at: new Date() } }],
     }).catch(() => undefined);
   } catch {
     /* ignore */
   }
-  // Legacy service worker path (harmless if not present)
   if (typeof navigator !== "undefined" && navigator.serviceWorker) {
     const tags = [`habit-${habitId}-${date}`, `habit-${habitId}-${date}-detail`];
     const send = (worker: ServiceWorker | null | undefined) => {
@@ -493,12 +487,12 @@ export async function dismissSticky(habitId: string, date: string) {
   }
 }
 
-/** Export all habits + logs as JSON string for backup before reinstall/update */
+/** Export all habits + logs as JSON string for backup */
 export function exportDataJson(data: AppData): string {
   return JSON.stringify(data, null, 2);
 }
 
-/** Import habits + logs from a JSON string; returns normalized data or null */
+/** Import habits + logs from a JSON string */
 export function importDataJson(raw: string): AppData | null {
   try {
     const parsed = JSON.parse(raw) as Partial<AppData>;
