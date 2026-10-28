@@ -53,7 +53,7 @@ export function StatusDialog({
     if (!dateKey || !habitId) return;
     if (status === "done") {
       setCell(dateKey, habitId, { status: "done" });
-      dismissSticky(habitId, dateKey);
+      void dismissSticky(habitId, dateKey);
       showToast("Done");
       onClose();
       return;
@@ -69,7 +69,7 @@ export function StatusDialog({
       reasons: draft.reasons,
       note: draft.note.trim(),
     });
-    dismissSticky(habitId, dateKey);
+    void dismissSticky(habitId, dateKey);
     showToast("Saved");
     onClose();
   }
@@ -97,6 +97,10 @@ export function StatusDialog({
   }
 
   const needsReason = draft.status === "partial" || draft.status === "missed";
+  const timeLabel = habit
+    ? format12(habit.startTime) +
+      (habit.endTime ? ` – ${format12(habit.endTime)}` : "")
+    : "";
 
   return (
     <Sheet
@@ -105,9 +109,7 @@ export function StatusDialog({
         if (!next) onClose();
       }}
       title={habit?.name ?? "Habit"}
-      description={
-        habit && dateKey ? `${humanDate(dateKey)} · ${format12(habit.time)}` : undefined
-      }
+      description={habit && dateKey ? `${humanDate(dateKey)} · ${timeLabel}` : undefined}
     >
       {habit?.question ? <p className="mb-3 text-sm text-pretty text-muted">{habit.question}</p> : null}
       <div className="grid grid-cols-3 gap-2">
