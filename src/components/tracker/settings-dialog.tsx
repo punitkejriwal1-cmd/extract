@@ -1,8 +1,13 @@
-import { useRef } from "react";
+import { useState } from "react";
 import { Sheet } from "@/components/tracker/sheet";
 import { cn } from "@/lib/cn";
 import { useHabits } from "@/lib/habit-store";
-import { exportDataJson, importDataJson, scheduleAllHabitNotifications } from "@/lib/habits";
+import {
+  copyText,
+  exportDataJson,
+  importDataJson,
+  scheduleAllHabitNotifications,
+} from "@/lib/habits";
 
 const DAY_CHOICES = [1, 2, 3, 4, 5, 6, 7];
 
@@ -11,52 +16,45 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
   const prefs = useHabits((s) => s.prefs);
   const setPrefs = useHabits((s) => s.setPrefs);
   const showToast = useHabits((s) => s.showToast);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState("");
 
   const percent = Math.round(prefs.fontScale * 100);
   const previous = prefs.visibleDays - 1;
 
-  function handleExport() {
-    try {
-      const json = exportDataJson(data);
-      const blob = new Blob([json], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `1percent-habits-backup-${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      showToast("Backup saved");
-    } catch {
-      showToast("Export failed");
+  async function handleExport() {
+    const json = exportDataJson(data);
+    const ok = await copyText(json);
+    if (ok) {
+      showToast("Backup copied — paste into Notes or Files to save");
+    } else {
+      // last resort: show text so user can long-press copy
+      setImportText(json);
+      setImportOpen(true);
+      showToast("Select all text below and copy it");
     }
   }
 
-  function handleImportClick() {
-    fileRef.current?.click();
-  }
-
-  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    try {
-      const text = await file.text();
-      const imported = importDataJson(text);
-      if (!imported) {
-        showToast("Invalid backup file");
-        return;
-      }
-      useHabits.getState().mutate((d) => {
-        d.habits = imported.habits;
-        d.logs = imported.logs;
-        d.reasonsList = imported.reasonsList;
-      });
-      await scheduleAllHabitNotifications(imported);
-      showToast(`Imported ${imported.habits.length} habits`);
-    } catch {
-      showToast("Import failed");
+  async function handleImport() {
+    const raw = importText.trim();
+    if (!raw) {
+      showToast("Paste your backup text first");
+      return;
     }
+    const imported = importDataJson(raw);
+    if (!imported) {
+      showToast("Invalid backup — check the text");
+      return;
+    }
+    useHabits.getState().mutate((d) => {
+      d.habits = imported.habits;
+      d.logs = imported.logs;
+      d.reasonsList = imported.reasonsList;
+    });
+    await scheduleAllHabitNotifications(imported);
+    setImportOpen(false);
+    setImportText("");
+    showToast(`Imported ${imported.habits.length} habits`);
   }
 
   return (
@@ -126,31 +124,58 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
       <section className="mt-3 space-y-3 rounded-xl bg-chip p-3">
         <h3 className="text-sm font-bold text-ink">Backup</h3>
         <p className="text-sm text-pretty text-muted">
-          Export your habits before updating the app. After installing a new APK you can import the same file so nothing is lost.
+          Before updating the app, tap Export. Your habits are copied so you can paste them into Notes or a file. After
+          installing the new APK, open Import, paste the text, and restore.
         </p>
         <div className="flex gap-2">
           <button
             type="button"
             className="min-h-11 flex-1 rounded-xl bg-accent text-sm font-bold text-accent-fg"
-            onClick={handleExport}
+            onClick={() => void handleExport()}
           >
-            Export habits
+            Export (copy)
           </button>
           <button
             type="button"
             className="min-h-11 flex-1 rounded-xl bg-partial text-sm font-bold text-partial-fg"
-            onClick={handleImportClick}
+            onClick={() => {
+              setImportText("");
+              setImportOpen(true);
+            }}
           >
-            Import habits
+            Import (paste)
           </button>
         </div>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="application/json,.json"
-          className="hidden"
-          onChange={(e) => void handleImportFile(e)}
-        />
+        {importOpen ? (
+          <div className="space-y-2">
+            <textarea
+              rows={6}
+              value={importText}
+              placeholder="Paste your backup JSON here"
+              className="w-full rounded-xl border border-line bg-raised px-3 py-2 font-mono text-xs text-ink outline-none focus:ring-2 focus:ring-accent"
+              onChange={(e) => setImportText(e.target.value)}
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="min-h-11 flex-1 rounded-xl bg-chip text-sm font-bold text-muted"
+                onClick={() => {
+                  setImportOpen(false);
+                  setImportText("");
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="min-h-11 flex-1 rounded-xl bg-accent text-sm font-bold text-accent-fg"
+                onClick={() => void handleImport()}
+              >
+                Restore
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
     </Sheet>
   );

@@ -12,13 +12,12 @@ import {
   cellLog,
   dateKey,
   dismissSticky,
-  format12,
-  frequencySummary,
   notifyHabit,
   now24,
   registerHabitWorker,
   scheduleAllHabitNotifications,
   sortedHabits,
+  timeRangeLabel,
   weekdayParts,
   type HabitStatus,
 } from "@/lib/habits";
@@ -48,7 +47,6 @@ export function Tracker() {
     void registerHabitWorker();
   }, [hydrate]);
 
-  // Schedule native sticky notifications for all habits when data is ready / changes
   useEffect(() => {
     if (!ready) return;
     void scheduleAllHabitNotifications(data);
@@ -103,7 +101,6 @@ export function Tracker() {
     };
   }, [ready]);
 
-  // Fallback while app is open: if the exact minute matches, fire immediately
   useEffect(() => {
     if (!ready) return;
     const fired = new Set<string>();
@@ -212,13 +209,10 @@ export function Tracker() {
                 >
                   <div className="flex items-center gap-2">
                     <span className="habit-time shrink-0 rounded-md bg-chip px-1.5 py-0.5 font-mono font-bold text-ink">
-                      {format12(habit.time)}
+                      {timeRangeLabel(habit)}
                     </span>
                     <span className="habit-name truncate font-bold text-ink">{habit.name}</span>
                   </div>
-                  {compact ? null : (
-                    <div className="habit-meta mt-0.5 truncate text-muted">{frequencySummary(habit)}</div>
-                  )}
                   {showWhy ? (
                     <div className="mt-1 flex flex-wrap items-center gap-1">
                       {(todayLog.reasons ?? []).map((reason) => (
@@ -230,7 +224,9 @@ export function Tracker() {
                         </span>
                       ))}
                       {todayLog.note ? (
-                        <span className="habit-meta max-w-40 truncate text-muted italic">“{todayLog.note}”</span>
+                        <span className="habit-meta max-w-40 truncate text-muted italic">
+                          “{todayLog.note}”
+                        </span>
                       ) : null}
                     </div>
                   ) : null}

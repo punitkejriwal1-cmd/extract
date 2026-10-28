@@ -59,6 +59,7 @@ export type Habit = {
   name: string;
   question: string;
   time: string;
+  endTime: string;
   freqType: FreqType;
   freqDays: number[];
   freqNum: number;
@@ -111,13 +112,22 @@ export function weekdayParts(key: string): { name: string; day: number } {
 }
 
 export function format12(time24: string): string {
-  if (!time24.includes(":")) return "";
+  if (!time24 || !time24.includes(":")) return "";
   const [hS, mS] = time24.split(":");
   let h = parseInt(hS, 10);
   if (Number.isNaN(h)) return time24;
   const ampm = h >= 12 ? "PM" : "AM";
   h = h % 12 || 12;
   return `${String(h).padStart(2, "0")}:${mS} ${ampm}`;
+}
+
+/** Home-screen label: "09:00 AM – 11:00 AM" or just start if no end */
+export function timeRangeLabel(h: Habit): string {
+  const start = format12(h.time);
+  if (!h.endTime) return start;
+  const end = format12(h.endTime);
+  if (!end) return start;
+  return `${start} – ${end}`;
 }
 
 export function now24(): string {
@@ -155,6 +165,7 @@ function habit(
     name,
     question,
     time,
+    endTime: "",
     freqType: "daily",
     freqDays: [...ALL_DAYS],
     freqNum: 2,
@@ -192,12 +203,14 @@ function normalizeHabit(raw: Partial<Habit> & { id?: string; name?: string }): H
     name: String(raw.name),
     question: typeof raw.question === "string" ? raw.question : "",
     time: typeof raw.time === "string" && raw.time.includes(":") ? raw.time : "07:00",
+    endTime:
+      typeof raw.endTime === "string" && raw.endTime.includes(":") ? raw.endTime : "",
     freqType: raw.freqType ?? "daily",
     freqDays: asNumberArray(raw.freqDays, [...ALL_DAYS]),
     freqNum: typeof raw.freqNum === "number" && raw.freqNum > 0 ? raw.freqNum : 2,
     freqDates: Array.isArray(raw.freqDates) ? raw.freqDates.filter((d) => typeof d === "string") : [],
     reminderDays: asNumberArray(raw.reminderDays, [...ALL_DAYS]),
-    sticky: Boolean(raw.sticky),
+    sticky: raw.sticky !== false,
   };
 }
 
@@ -247,7 +260,7 @@ export function cellLog(data: AppData, key: string, habitId: string): CellLog | 
 
 export function auditForDate(data: AppData, key: string): string {
   const lines = sortedHabits(data).map((h) => {
-    const time = format12(h.time);
+    const time = timeRangeLabel(h);
     const log = cellLog(data, key, h.id);
     if (!log?.status) return `${time} | ${h.name} | UNMARKED`;
     if (log.status === "done") return `${time} | ${h.name} | DONE`;
@@ -295,7 +308,7 @@ export function auditRange(data: AppData, fromKey: string, toKey: string): strin
 }
 
 export function blankHabitDraft(): Habit {
-  return habit("", "", "", "07:00");
+  return habit("", "", "", "07:00", { endTime: "08:00" });
 }
 
 export async function registerHabitWorker(): Promise<ServiceWorkerRegistration | null> {
@@ -307,7 +320,6 @@ export async function registerHabitWorker(): Promise<ServiceWorkerRegistration |
   }
 }
 
-/** Stable positive 32-bit notification id from habit id + date */
 export function habitNotificationId(habitId: string, day: string): number {
   const s = `${habitId}|${day}`;
   let h = 0;
@@ -326,7 +338,6 @@ function parseTime(time24: string): { hour: number; minute: number } | null {
   return { hour, minute };
 }
 
-/** Next Date for a habit time today or tomorrow if already passed */
 function nextFireDate(time24: string): Date | null {
   const t = parseTime(time24);
   if (!t) return null;
@@ -343,7 +354,7 @@ async function ensureChannel() {
   await LocalNotifications.createChannel({
     id: "habits",
     name: "Habit Reminders",
-    description: "Sticky reminders for your habits",
+    description: "Sticky habit reminders",
     importance: 5,
     visibility: 1,
     vibration: true,
@@ -361,36 +372,32 @@ export async function ensureNotificationPermission(): Promise<boolean> {
   }
 }
 
-/** Show a sticky notification immediately */
+function notifPayload(habitItem: Habit, day: string, at: Date) {
+  const id = habitNotificationId(habitItem.id, day);
+  return {
+    id,
+    title: habitItem.name,
+    body: " ",
+    channelId: "habits",
+    ongoing: true,
+    autoCancel: false,
+    schedule: { at, allowWhileIdle: true as const },
+    extra: {
+      habitId: habitItem.id,
+      dateKey: day,
+    },
+  };
+}
+
+/** Immediate sticky notification — title = habit name only */
 export async function notifyHabit(habitItem: Habit): Promise<boolean> {
   try {
     const ok = await ensureNotificationPermission();
     if (!ok) return false;
     await ensureChannel();
-
     const today = dateKey(0);
-    const id = habitNotificationId(habitItem.id, today);
-    const title = `${format12(habitItem.time)} — ${habitItem.name}`;
-    const body =
-      habitItem.question ||
-      "Open the app and mark it when done. This stays until you do.";
-
     await LocalNotifications.schedule({
-      notifications: [
-        {
-          id,
-          title,
-          body,
-          channelId: "habits",
-          ongoing: true,
-          autoCancel: false,
-          schedule: { at: new Date(Date.now() + 400) },
-          extra: {
-            habitId: habitItem.id,
-            dateKey: today,
-          },
-        },
-      ],
+      notifications: [notifPayload(habitItem, today, new Date(Date.now() + 400))],
     });
     return true;
   } catch (err) {
@@ -399,7 +406,6 @@ export async function notifyHabit(habitItem: Habit): Promise<boolean> {
   }
 }
 
-/** Schedule sticky notifications for all habits that still need a mark */
 export async function scheduleAllHabitNotifications(data: AppData): Promise<void> {
   try {
     const ok = await ensureNotificationPermission();
@@ -408,24 +414,12 @@ export async function scheduleAllHabitNotifications(data: AppData): Promise<void
 
     const today = dateKey(0);
     const dow = new Date().getDay();
-    const notifications: {
-      id: number;
-      title: string;
-      body: string;
-      channelId: string;
-      ongoing: boolean;
-      autoCancel: boolean;
-      schedule: { at: Date; allowWhileIdle?: boolean };
-      extra: Record<string, string>;
-    }[] = [];
+    const list: ReturnType<typeof notifPayload>[] = [];
 
     for (const h of data.habits) {
       if (!h.time) continue;
       const days = h.reminderDays?.length ? h.reminderDays : ALL_DAYS;
       if (cellLog(data, today, h.id)?.status) continue;
-
-      const t = parseTime(h.time);
-      if (!t) continue;
 
       const fire = nextFireDate(h.time);
       if (!fire) continue;
@@ -436,36 +430,21 @@ export async function scheduleAllHabitNotifications(data: AppData): Promise<void
 
       const dayKey =
         fire.toDateString() === new Date().toDateString() ? today : dateKey(1);
-      const id = habitNotificationId(h.id, dayKey);
-
-      notifications.push({
-        id,
-        title: `${format12(h.time)} — ${h.name}`,
-        body: h.question || "Open the app and mark it when done. This stays until you do.",
-        channelId: "habits",
-        ongoing: true,
-        autoCancel: false,
-        schedule: { at: fire, allowWhileIdle: true },
-        extra: {
-          habitId: h.id,
-          dateKey: dayKey,
-        },
-      });
+      list.push(notifPayload(h, dayKey, fire));
     }
 
-    if (notifications.length === 0) return;
+    if (list.length === 0) return;
 
     await LocalNotifications.cancel({
-      notifications: notifications.map((n) => ({ id: n.id })),
+      notifications: list.map((n) => ({ id: n.id })),
     }).catch(() => undefined);
 
-    await LocalNotifications.schedule({ notifications });
+    await LocalNotifications.schedule({ notifications: list });
   } catch (err) {
     console.error("scheduleAllHabitNotifications error:", err);
   }
 }
 
-/** Remove sticky notification when habit is marked inside the app */
 export async function dismissSticky(habitId: string, date: string) {
   try {
     const id = habitNotificationId(habitId, date);
@@ -476,28 +455,42 @@ export async function dismissSticky(habitId: string, date: string) {
   } catch {
     /* ignore */
   }
-  if (typeof navigator !== "undefined" && navigator.serviceWorker) {
-    const tags = [`habit-${habitId}-${date}`, `habit-${habitId}-${date}-detail`];
-    const send = (worker: ServiceWorker | null | undefined) => {
-      if (!worker) return;
-      for (const tag of tags) worker.postMessage({ type: "close-habit", tag });
-    };
-    send(navigator.serviceWorker.controller);
-    void navigator.serviceWorker.ready.then((reg) => send(reg.active));
-  }
 }
 
-/** Export all habits + logs as JSON string for backup */
 export function exportDataJson(data: AppData): string {
   return JSON.stringify(data, null, 2);
 }
 
-/** Import habits + logs from a JSON string */
 export function importDataJson(raw: string): AppData | null {
   try {
     const parsed = JSON.parse(raw) as Partial<AppData>;
     return normalizeData(parsed);
   } catch {
     return null;
+  }
+}
+
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* fall through */
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
   }
 }

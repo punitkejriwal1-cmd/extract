@@ -39,6 +39,7 @@ export function HabitDialog({
       found
         ? {
             ...found,
+            endTime: found.endTime || "",
             freqDays: [...found.freqDays],
             freqDates: [...found.freqDates],
             reminderDays: [...found.reminderDays],
@@ -66,7 +67,9 @@ export function HabitDialog({
       id: draft.id || `h-${Date.now()}`,
       name,
       question: draft.question.trim(),
+      endTime: draft.endTime || "",
       freqNum: Math.min(31, Math.max(1, Number(draft.freqNum) || 2)),
+      sticky: true,
     });
     showToast("Saved");
     onClose();
@@ -109,6 +112,30 @@ export function HabitDialog({
             onChange={(e) => setDraft((d) => ({ ...d, question: e.target.value }))}
           />
         </Field>
+
+        <section className="space-y-3 rounded-xl border border-line bg-chip/60 p-3">
+          <div className="text-xs font-bold tracking-wide text-muted uppercase">Time period</div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Starts">
+              <input
+                type="time"
+                required
+                value={draft.time}
+                className="field font-mono font-bold"
+                onChange={(e) => setDraft((d) => ({ ...d, time: e.target.value }))}
+              />
+            </Field>
+            <Field label="Ends">
+              <input
+                type="time"
+                value={draft.endTime || ""}
+                className="field font-mono font-bold"
+                onChange={(e) => setDraft((d) => ({ ...d, endTime: e.target.value }))}
+              />
+            </Field>
+          </div>
+          <p className="text-xs text-muted">Shown on the home screen. Reminder fires at the start time.</p>
+        </section>
 
         <section className="space-y-3 rounded-xl border border-line bg-chip/60 p-3">
           <Field label="Frequency">
@@ -193,38 +220,13 @@ export function HabitDialog({
         </section>
 
         <section className="space-y-3 rounded-xl border border-line bg-chip/60 p-3">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-xs font-bold tracking-wide text-muted uppercase">Reminder time</span>
-            <input
-              type="time"
-              value={draft.time}
-              className="field w-auto font-mono font-bold"
-              onChange={(e) => setDraft((d) => ({ ...d, time: e.target.value }))}
-            />
-          </div>
-          <div>
-            <div className="mb-2 text-xs font-bold tracking-wide text-muted uppercase">Reminder days</div>
-            <DayRow
-              days={draft.reminderDays}
-              labels={["S", "M", "T", "W", "T", "F", "S"]}
-              tone="partial"
-              onToggle={(day) => toggleDay("reminderDays", day)}
-            />
-          </div>
-          <label className="flex min-h-11 items-center justify-between gap-3 text-sm font-bold text-ink">
-            <span className="pr-2">
-              Keep the alert until I answer
-              <span className="mt-0.5 block text-xs font-semibold text-muted">
-                Stays in the shade until Done, Partial, or Missed. A swipe brings it back.
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              checked={draft.sticky}
-              className="size-5 shrink-0 accent-current"
-              onChange={(e) => setDraft((d) => ({ ...d, sticky: e.target.checked }))}
-            />
-          </label>
+          <div className="text-xs font-bold tracking-wide text-muted uppercase">Reminder days</div>
+          <DayRow
+            days={draft.reminderDays}
+            labels={["S", "M", "T", "W", "T", "F", "S"]}
+            tone="partial"
+            onToggle={(day) => toggleDay("reminderDays", day)}
+          />
         </section>
 
         <div className="flex gap-2">
