@@ -38,7 +38,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        vm.setVisibleDays(settingsPrefs.getInt("visible_days", 2))
+        vm.setVisibleDays(settingsPrefs.getInt("visible_days", 4))
         requestNotifPermission()
         vm.refreshAlarms()
 
