@@ -21,7 +21,7 @@ class HabitRepository(private val db: AppDatabase) {
     suspend fun getAllLogs(): List<LogEntity> = logs.getAll()
     suspend fun getLog(dateKey: String, habitId: String): LogEntity? = logs.getForDateAndHabit(dateKey, habitId)
 
-    suspend fun exportJson(): String {
+    suspend fun exportJson(reasonsList: List<String> = emptyList()): String {
         val root = JSONObject()
         val hArr = JSONArray()
         habits.getAll().forEach { h ->
@@ -44,7 +44,7 @@ class HabitRepository(private val db: AppDatabase) {
                 .put("note", l.note)
             day.put(l.habitId, item)
         }
-        root.put("habits", hArr).put("logs", logObject)
+        root.put("habits", hArr).put("logs", logObject).put("reasonsList", JSONArray(reasonsList))
         return root.toString(2)
     }
 
