@@ -45,7 +45,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             var dark by remember { mutableStateOf(settingsPrefs.getBoolean("dark_theme", true)) }
             var fontScale by remember { mutableStateOf(settingsPrefs.getFloat("font_scale", 1.0f).coerceIn(0.6f, 1.0f)) }
-            var visibleDays by remember { mutableStateOf(settingsPrefs.getInt("visible_days", 2).coerceIn(1, 7)) }
+            var visibleDays by remember { mutableStateOf(settingsPrefs.getInt("visible_days", 4).coerceIn(1, 7)) }
             var screen by remember { mutableStateOf<Screen>(Screen.Home) }
             val systemDensity = LocalDensity.current
 
