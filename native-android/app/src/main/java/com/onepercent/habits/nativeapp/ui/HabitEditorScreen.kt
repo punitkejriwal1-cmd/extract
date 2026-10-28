@@ -52,6 +52,10 @@ fun HabitEditorScreen(
         endTime: String,
         reminderTime: String,
         reminderDays: String,
+        freqType: String,
+        freqDays: String,
+        freqNum: Int,
+        freqDates: String,
         color: Long,
         freqType: String,
         freqDays: String,
@@ -76,6 +80,10 @@ fun HabitEditorScreen(
         )
     }
     var color by remember { mutableStateOf(existing?.color ?: COLORS[Random.nextInt(COLORS.size)]) }
+    var freqType by remember { mutableStateOf(existing?.freqType ?: "daily") }
+    var freqDays by remember { mutableStateOf(existing?.freqDays?.split(",")?.mapNotNull { it.trim().toIntOrNull() }?.toSet() ?: (0..6).toSet()) }
+    var freqNum by remember { mutableStateOf(existing?.freqNum ?: 2) }
+    var freqDates by remember { mutableStateOf(existing?.freqDates.orEmpty()) }
     var freqType by remember { mutableStateOf(existing?.freqType ?: "daily") }
     var freqDays by remember { mutableStateOf(existing?.freqDays?.split(",")?.mapNotNull { it.toIntOrNull() }?.toSet() ?: (0..6).toSet()) }
     var freqNum by remember { mutableStateOf((existing?.freqNum ?: 2).toString()) }
@@ -176,6 +184,63 @@ fun HabitEditorScreen(
             if (freqType == "specific_dates") {
                 OutlinedTextField(value = freqDates, onValueChange = { freqDates = it }, label = { Text("Dates (YYYY-MM-DD, comma-separated)") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
             }
+            Text("How often", style = MaterialTheme.typography.labelLarge)
+            val frequencyOptions = listOf(
+                "daily" to "Every day",
+                "weekdays_custom" to "Specific weekdays",
+                "every_x_days" to "Every X days",
+                "x_per_week" to "X times/week",
+                "x_per_month" to "X times/month",
+                "specific_dates" to "Specific dates",
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                frequencyOptions.chunked(2).forEach { rowOptions ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        rowOptions.forEach { (value, label) ->
+                            FilterChip(
+                                selected = freqType == value,
+                                onClick = { freqType = value },
+                                label = { Text(label) },
+                            )
+                        }
+                    }
+                }
+            }
+            if (freqType == "weekdays_custom") {
+                Text("Habit days", style = MaterialTheme.typography.labelMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    DAY_LABELS.forEachIndexed { i, label ->
+                        FilterChip(
+                            selected = i in freqDays,
+                            onClick = { freqDays = if (i in freqDays) freqDays - i else freqDays + i },
+                            label = { Text(label) },
+                        )
+                    }
+                }
+            }
+            if (freqType in setOf("every_x_days", "x_per_week", "x_per_month")) {
+                OutlinedTextField(
+                    value = freqNum.toString(),
+                    onValueChange = { it.toIntOrNull()?.takeIf { n -> n in 1..31 }?.let { freqNum = it } },
+                    label = { Text(when (freqType) {
+                        "every_x_days" -> "Repeat every X days"
+                        "x_per_week" -> "Times per week"
+                        else -> "Times per month"
+                    }) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            if (freqType == "specific_dates") {
+                OutlinedTextField(
+                    value = freqDates,
+                    onValueChange = { freqDates = it },
+                    label = { Text("Dates (YYYY-MM-DD, comma-separated)") },
+                    supportingText = { Text("Example: 2026-11-01, 2026-11-05") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
             Spacer(Modifier.height(8.dp))
             Button(
                 onClick = {
@@ -188,6 +253,10 @@ fun HabitEditorScreen(
                         end,
                         remind.ifBlank { start.ifBlank { "09:00" } },
                         days.sorted().joinToString(","),
+                        freqType,
+                        freqDays.sorted().joinToString(","),
+                        freqNum,
+                        freqDates,
                         color,
                         freqType,
                         freqDays.sorted().joinToString(","),
