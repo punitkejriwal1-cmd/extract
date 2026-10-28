@@ -8,8 +8,11 @@ import com.onepercent.habits.nativeapp.data.HabitEntity
 import com.onepercent.habits.nativeapp.data.HabitRepository
 import com.onepercent.habits.nativeapp.data.LogEntity
 import com.onepercent.habits.nativeapp.notifications.NotificationHelper
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -17,27 +20,31 @@ import java.util.UUID
 data class HomeUiState(
     val habits: List<HabitEntity> = emptyList(),
     val logsByKey: Map<String, Map<String, LogEntity>> = emptyMap(),
-    val dateKeys: List<String> = listOf(HabitRepository.dateKey(0), HabitRepository.dateKey(-1)),
+    val dateKeys: List<String> = (0L downTo -1L).map(HabitRepository::dateKey),
 )
 
 class HabitsViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = (app as HabitsApp).repository
     private val ctx = app.applicationContext
+    private val visibleDays = MutableStateFlow(2)
 
-    private val dateKeys = listOf(
-        HabitRepository.dateKey(0),
-        HabitRepository.dateKey(-1),
-    )
+    fun setVisibleDays(days: Int) {
+        visibleDays.value = days.coerceIn(1, 7)
+    }
 
     val uiState = combine(
         repo.observeHabits(),
-        repo.observeLogs(dateKeys),
-    ) { habits, logs ->
+        visibleDays.flatMapLatest { count ->
+            val keys = (0 until count).map { HabitRepository.dateKey(-it.toLong()) }
+            repo.observeLogs(keys).map { logs -> keys to logs }
+        },
+    ) { habits, datedLogs ->
+        val (keys, logs) = datedLogs
         val map = mutableMapOf<String, MutableMap<String, LogEntity>>()
         logs.forEach { log ->
             map.getOrPut(log.dateKey) { mutableMapOf() }[log.habitId] = log
         }
-        HomeUiState(habits = habits, logsByKey = map, dateKeys = dateKeys)
+        HomeUiState(habits = habits, logsByKey = map, dateKeys = keys)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
     fun refreshAlarms() {
