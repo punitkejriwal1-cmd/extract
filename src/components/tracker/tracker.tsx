@@ -42,6 +42,7 @@ export function Tracker() {
       else if (editingId || creating) { setEditingId(null); setCreating(false); }
       else if (auditOpen) setAuditOpen(false);
       else if (settingsOpen) setSettingsOpen(false);
+      else void App.exitApp();
     }).then((listener) => { handle = listener; });
     return () => { void handle?.remove(); };
   }, [status, editingId, creating, auditOpen, settingsOpen]);
