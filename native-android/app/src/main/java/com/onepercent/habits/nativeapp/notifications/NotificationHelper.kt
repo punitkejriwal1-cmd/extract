@@ -108,7 +108,6 @@ object NotificationHelper {
 
     private fun schedulePendingIntent(context: Context, habitId: String): PendingIntent {
         val intent = Intent(context, ReminderReceiver::class.java).apply {
-            action = "com.onepercent.habits.REMINDER.$habitId"
             putExtra("habitId", habitId)
         }
         return PendingIntent.getBroadcast(
