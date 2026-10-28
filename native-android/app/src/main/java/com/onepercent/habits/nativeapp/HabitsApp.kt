@@ -12,7 +12,7 @@ class HabitsApp : Application() {
     override fun onCreate() {
         super.onCreate()
         val db = AppDatabase.get(this)
-        repository = HabitRepository(db.habitDao(), db.logDao())
+        repository = HabitRepository(db)
         NotificationHelper.createChannel(this)
     }
 }
