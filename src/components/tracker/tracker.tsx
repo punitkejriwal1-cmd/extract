@@ -17,6 +17,7 @@ import {
   notifyHabit,
   now24,
   registerHabitWorker,
+  scheduleAllHabitNotifications,
   sortedHabits,
   weekdayParts,
   type HabitStatus,
@@ -47,6 +48,12 @@ export function Tracker() {
     void registerHabitWorker();
   }, [hydrate]);
 
+  // Schedule native sticky notifications for all habits when data is ready / changes
+  useEffect(() => {
+    if (!ready) return;
+    void scheduleAllHabitNotifications(data);
+  }, [ready, data.habits]);
+
   useEffect(() => {
     if (!ready) return;
     let cancelled = false;
@@ -58,7 +65,7 @@ export function Tracker() {
           if (cancelled || marks.length === 0) return;
           for (const mark of marks) {
             useHabits.getState().applyRemoteMark(mark);
-            dismissSticky(mark.habitId, mark.dateKey);
+            void dismissSticky(mark.habitId, mark.dateKey);
           }
           const label =
             marks.length === 1
@@ -83,7 +90,10 @@ export function Tracker() {
     };
     navigator.serviceWorker?.addEventListener("message", onMessage);
     const onVisible = () => {
-      if (document.visibilityState === "visible") ingest();
+      if (document.visibilityState === "visible") {
+        ingest();
+        void scheduleAllHabitNotifications(useHabits.getState().data);
+      }
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
@@ -93,6 +103,7 @@ export function Tracker() {
     };
   }, [ready]);
 
+  // Fallback while app is open: if the exact minute matches, fire immediately
   useEffect(() => {
     if (!ready) return;
     const fired = new Set<string>();

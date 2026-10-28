@@ -3,6 +3,8 @@ export const LEGACY_KEY = "one_percent_loop_v2";
 export const THEME_KEY = "one_percent_theme_v2";
 export const PREFS_KEY = "one_percent_prefs_v1";
 
+import { LocalNotifications } from "@capacitor/local-notifications";
+
 export type DisplayPrefs = {
   fontScale: number;
   visibleDays: number;
@@ -164,9 +166,6 @@ function habit(
 }
 
 export function defaultData(): AppData {
-  const today = dateKey(0);
-  const yesterday = dateKey(-1);
-  const twoAgo = dateKey(-2);
   return {
     reasonsList: [
       "Overslept",
@@ -176,48 +175,8 @@ export function defaultData(): AppData {
       "Procrastinated",
       "Urgent Work",
     ],
-    habits: [
-      habit("h1", "Wake Up On Time", "Out of bed at alarm?", "06:00"),
-      habit("h2", "Study Slot 1 (Morning GS)", "Completed full morning study block?", "06:30"),
-      habit("h3", "Timetable Audit", "Audited timetable?", "08:20"),
-      habit("h4", "Anki Flashcards Review", "Completed daily due cards?", "09:00"),
-      habit("h5", "Study Slot 2 (Mid-Day)", "Completed second study session?", "11:00"),
-      habit(
-        "h6",
-        "Workout / Exercise",
-        "45 mins physical movement?",
-        "18:00",
-        {
-          freqType: "weekdays_custom",
-          freqDays: [1, 2, 3, 4, 5, 6],
-          reminderDays: [1, 2, 3, 4, 5, 6],
-        },
-      ),
-    ],
-    logs: {
-      [twoAgo]: {
-        h1: { status: "done" },
-        h2: { status: "done" },
-        h3: { status: "done" },
-        h4: { status: "partial", partialPct: 50, reasons: ["Previous Task Overran"], note: "Half deck done" },
-        h5: { status: "done" },
-        h6: { status: "done" },
-      },
-      [yesterday]: {
-        h1: { status: "done" },
-        h2: {
-          status: "partial",
-          partialPct: 60,
-          reasons: ["Previous Task Overran"],
-          note: "Started 30 mins late",
-        },
-        h3: { status: "done" },
-        h4: { status: "done" },
-        h5: { status: "missed", reasons: ["Phone Distraction"], note: "Scrolled after breakfast" },
-        h6: { status: "partial", partialPct: 50, reasons: ["Low Energy / Tired"], note: "Light stretching only" },
-      },
-      [today]: {},
-    },
+    habits: [],
+    logs: {},
   };
 }
 
@@ -348,67 +307,73 @@ export async function registerHabitWorker(): Promise<ServiceWorkerRegistration |
   }
 }
 
-export function dismissSticky(habitId: string, date: string) {
-  if (typeof navigator === "undefined" || !navigator.serviceWorker) return;
-  const tags = [`habit-${habitId}-${date}`, `habit-${habitId}-${date}-detail`];
-  const send = (worker: ServiceWorker | null | undefined) => {
-    if (!worker) return;
-    for (const tag of tags) worker.postMessage({ type: "close-habit", tag });
-  };
-  send(navigator.serviceWorker.controller);
-  void navigator.serviceWorker.ready.then((reg) => send(reg.active));
+/** Stable positive 32-bit notification id from habit id + date */
+export function habitNotificationId(habitId: string, day: string): number {
+  const s = `${habitId}|${day}`;
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h) || 1;
 }
 
-type NoteAction = { action: string; title: string };
-
-function notificationActions(): NoteAction[] {
-  const raw =
-    typeof Notification !== "undefined"
-      ? (Notification as { maxActions?: number }).maxActions
-      : undefined;
-  const max = typeof raw === "number" && raw >= 0 ? raw : 2;
-  const done: NoteAction = { action: "done", title: "Done" };
-  const partial: NoteAction = { action: "partial", title: "Partial" };
-  const missed: NoteAction = { action: "missed", title: "Missed" };
-  const more: NoteAction = { action: "more", title: "Partial / Missed" };
-  if (max >= 3) return [done, partial, missed];
-  if (max >= 2) return [done, more];
-  if (max === 1) return [done];
-  return [];
+function parseTime(time24: string): { hour: number; minute: number } | null {
+  if (!time24.includes(":")) return null;
+  const [hS, mS] = time24.split(":");
+  const hour = parseInt(hS, 10);
+  const minute = parseInt(mS, 10);
+  if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
+  return { hour, minute };
 }
 
-import { LocalNotifications } from "@capacitor/local-notifications";
+/** Next Date for a habit time today or tomorrow if already passed */
+function nextFireDate(time24: string): Date | null {
+  const t = parseTime(time24);
+  if (!t) return null;
+  const d = new Date();
+  d.setSeconds(0, 0);
+  d.setHours(t.hour, t.minute, 0, 0);
+  if (d.getTime() <= Date.now() + 2000) {
+    d.setDate(d.getDate() + 1);
+  }
+  return d;
+}
 
+async function ensureChannel() {
+  await LocalNotifications.createChannel({
+    id: "habits",
+    name: "Habit Reminders",
+    description: "Sticky reminders for your habits",
+    importance: 5,
+    visibility: 1,
+    vibration: true,
+  });
+}
+
+export async function ensureNotificationPermission(): Promise<boolean> {
+  try {
+    const perm = await LocalNotifications.checkPermissions();
+    if (perm.display === "granted") return true;
+    const req = await LocalNotifications.requestPermissions();
+    return req.display === "granted";
+  } catch {
+    return false;
+  }
+}
+
+/** Show a sticky notification immediately (used by Test or when time matches while open) */
 export async function notifyHabit(habitItem: Habit): Promise<boolean> {
   try {
-    // Request permission (Android 13+)
-    const perm = await LocalNotifications.checkPermissions();
-    if (perm.display !== "granted") {
-      const req = await LocalNotifications.requestPermissions();
-      if (req.display !== "granted") return false;
-    }
+    const ok = await ensureNotificationPermission();
+    if (!ok) return false;
+    await ensureChannel();
 
-    // Create a high-importance channel (sticky behaviour)
-    await LocalNotifications.createChannel({
-      id: "habits",
-      name: "Habit Reminders",
-      description: "Sticky reminders for your habits",
-      importance: 5,
-      visibility: 1,
-      vibration: true,
-    });
-
+    const today = dateKey(0);
+    const id = habitNotificationId(habitItem.id, today);
     const title = `${format12(habitItem.time)} — ${habitItem.name}`;
     const body =
       habitItem.question ||
       "Open the app and mark it when done. This stays until you do.";
-
-    // Unique ID based on habit + date
-    const id = Math.abs(
-      (habitItem.id + dateKey(0))
-        .split("")
-        .reduce((a, c) => ((a << 5) - a + c.charCodeAt(0)) | 0, 0),
-    );
 
     await LocalNotifications.schedule({
       notifications: [
@@ -419,18 +384,126 @@ export async function notifyHabit(habitItem: Habit): Promise<boolean> {
           channelId: "habits",
           ongoing: true,
           autoCancel: false,
-          schedule: { at: new Date(Date.now() + 500) },
+          schedule: { at: new Date(Date.now() + 400) },
           extra: {
             habitId: habitItem.id,
-            dateKey: dateKey(0),
+            dateKey: today,
           },
         },
       ],
     });
-
     return true;
   } catch (err) {
     console.error("notifyHabit error:", err);
     return false;
+  }
+}
+
+/** Schedule sticky notifications for all habits that still need a mark today (or next occurrence) */
+export async function scheduleAllHabitNotifications(data: AppData): Promise<void> {
+  try {
+    const ok = await ensureNotificationPermission();
+    if (!ok) return;
+    await ensureChannel();
+
+    const today = dateKey(0);
+    const dow = new Date().getDay();
+    const notifications: {
+      id: number;
+      title: string;
+      body: string;
+      channelId: string;
+      ongoing: boolean;
+      autoCancel: boolean;
+      schedule: { at: Date; allowWhileIdle?: boolean };
+      extra: Record<string, string>;
+    }[] = [];
+
+    for (const h of data.habits) {
+      if (!h.time) continue;
+      const days = h.reminderDays?.length ? h.reminderDays : ALL_DAYS;
+      // If already marked today, skip
+      if (cellLog(data, today, h.id)?.status) continue;
+
+      const t = parseTime(h.time);
+      if (!t) continue;
+
+      const fire = nextFireDate(h.time);
+      if (!fire) continue;
+
+      // If next fire is tomorrow, only schedule if that weekday is allowed
+      const fireDow = fire.getDay();
+      if (!days.includes(fireDow)) continue;
+      // Also allow if it is still today and today is allowed
+      if (fire.toDateString() === new Date().toDateString() && !days.includes(dow)) continue;
+
+      const dayKey =
+        fire.toDateString() === new Date().toDateString() ? today : dateKey(1);
+      const id = habitNotificationId(h.id, dayKey);
+
+      notifications.push({
+        id,
+        title: `${format12(h.time)} — ${h.name}`,
+        body: h.question || "Open the app and mark it when done. This stays until you do.",
+        channelId: "habits",
+        ongoing: true,
+        autoCancel: false,
+        schedule: { at: fire, allowWhileIdle: true },
+        extra: {
+          habitId: h.id,
+          dateKey: dayKey,
+        },
+      });
+    }
+
+    if (notifications.length === 0) return;
+
+    // Cancel previous ones for these ids then reschedule
+    await LocalNotifications.cancel({
+      notifications: notifications.map((n) => ({ id: n.id })),
+    }).catch(() => undefined);
+
+    await LocalNotifications.schedule({ notifications });
+  } catch (err) {
+    console.error("scheduleAllHabitNotifications error:", err);
+  }
+}
+
+/** Remove sticky notification when habit is marked inside the app */
+export async function dismissSticky(habitId: string, date: string) {
+  try {
+    const id = habitNotificationId(habitId, date);
+    await LocalNotifications.cancel({ notifications: [{ id }] });
+    // Also try removing from delivered shade
+    await LocalNotifications.removeDeliveredNotifications({
+      notifications: [{ id, title: "", body: "", schedule: { at: new Date() } }],
+    }).catch(() => undefined);
+  } catch {
+    /* ignore */
+  }
+  // Legacy service worker path (harmless if not present)
+  if (typeof navigator !== "undefined" && navigator.serviceWorker) {
+    const tags = [`habit-${habitId}-${date}`, `habit-${habitId}-${date}-detail`];
+    const send = (worker: ServiceWorker | null | undefined) => {
+      if (!worker) return;
+      for (const tag of tags) worker.postMessage({ type: "close-habit", tag });
+    };
+    send(navigator.serviceWorker.controller);
+    void navigator.serviceWorker.ready.then((reg) => send(reg.active));
+  }
+}
+
+/** Export all habits + logs as JSON string for backup before reinstall/update */
+export function exportDataJson(data: AppData): string {
+  return JSON.stringify(data, null, 2);
+}
+
+/** Import habits + logs from a JSON string; returns normalized data or null */
+export function importDataJson(raw: string): AppData | null {
+  try {
+    const parsed = JSON.parse(raw) as Partial<AppData>;
+    return normalizeData(parsed);
+  } catch {
+    return null;
   }
 }
