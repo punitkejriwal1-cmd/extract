@@ -77,7 +77,9 @@ class HabitsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun refreshAlarms() {
         viewModelScope.launch {
-            NotificationHelper.scheduleAll(ctx, repo.getAllHabits())
+            val today = HabitRepository.dateKey(0)
+            val completed = repo.getAllLogs().filter { it.dateKey == today }.map { it.habitId }.toSet()
+            NotificationHelper.scheduleAll(ctx, repo.getAllHabits(), completed)
         }
     }
 
@@ -232,7 +234,7 @@ class HabitsViewModel(app: Application) : AndroidViewModel(app) {
                     prefs.edit().putStringSet("reasons", _reasons.value.toSet()).apply()
                 }
                 previousHabits.forEach { NotificationHelper.cancelSchedule(ctx, it.id) }
-                NotificationHelper.scheduleAll(ctx, repo.getAllHabits())
+                NotificationHelper.scheduleAll(ctx, repo.getAllHabits(), repo.getAllLogs().filter { it.dateKey == HabitRepository.dateKey(0) }.map { it.habitId }.toSet())
                 onDone(true)
             } catch (_: Exception) {
                 onDone(false)
