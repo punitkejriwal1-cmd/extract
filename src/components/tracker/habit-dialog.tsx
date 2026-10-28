@@ -19,7 +19,6 @@ export function HabitDialog({
   const showToast = useHabits((s) => s.showToast);
   const open = creating || Boolean(habitId);
   const existing = data.habits.find((h) => h.id === habitId) ?? null;
-
   const [draft, setDraft] = useState<Habit>(blankHabitDraft());
 
   useEffect(() => {
@@ -32,9 +31,9 @@ export function HabitDialog({
             startTime: found.startTime || found.reminderTime || "09:00",
             endTime: found.endTime || "",
             reminderTime: found.reminderTime || found.startTime || "09:00",
-            freqDays: [...found.reminderDays],
+            freqDays: [...(found.reminderDays ?? [])],
             freqDates: [],
-            reminderDays: [...found.reminderDays],
+            reminderDays: [...(found.reminderDays ?? [])],
           }
         : blankHabitDraft(),
     );
@@ -59,9 +58,9 @@ export function HabitDialog({
       id: draft.id || `h-${Date.now()}`,
       name,
       question: draft.question.trim(),
-      startTime: draft.startTime,
+      startTime: draft.startTime || "09:00",
       endTime: draft.endTime || "",
-      reminderTime: draft.reminderTime || draft.startTime,
+      reminderTime: draft.reminderTime || "09:00",
       freqType: draft.reminderDays.length === 7 ? "daily" : "weekdays_custom",
       freqDays: [...draft.reminderDays],
       freqDates: [],
@@ -78,30 +77,74 @@ export function HabitDialog({
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
-      title={existing ? "Edit habit" : "Create habit"}
+      title={existing ? "Edit reminder" : "Create reminder"}
     >
       <form className="space-y-4" onSubmit={save}>
-        <Field label="Name">
+        <Field label="Reminder name">
           <input
             required
             maxLength={65}
             value={draft.name}
-            placeholder="Morning revision"
+            placeholder="Call the bank"
             className="field"
             onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
           />
         </Field>
-        <Field label="Question (optional)">
+        <Field label="Note (optional)">
           <input
-            maxLength={65}
+            maxLength={120}
             value={draft.question}
-            placeholder="Completed without the phone?"
+            placeholder="Anything to remember?"
             className="field"
             onChange={(e) => setDraft((d) => ({ ...d, question: e.target.value }))}
           />
         </Field>
 
+        <section className="space-y-3 rounded-xl border border-line bg-chip/60 p-3">
+          <Field label="Remind me at">
+            <input
+              type="time"
+              required
+              value={draft.reminderTime}
+              className="field font-mono font-bold"
+              onChange={(e) => setDraft((d) => ({ ...d, reminderTime: e.target.value }))}
+            />
+          </Field>
+          <p className="text-xs text-muted">
+            The reminder fires at this time on each selected day. Select no days to pause this reminder.
+          </p>
+          <div>
+            <div className="mb-2 text-xs font-bold tracking-wide text-muted uppercase">Repeat on</div>
+            <DayRow
+              days={draft.reminderDays}
+              labels={["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]}
+              onToggle={toggleDay}
+            />
+          </div>
+        </section>
 
+        <details className="rounded-xl border border-line bg-chip/40 p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-muted">Optional timeline display</summary>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <Field label="Starts">
+              <input
+                type="time"
+                value={draft.startTime}
+                className="field font-mono"
+                onChange={(e) => setDraft((d) => ({ ...d, startTime: e.target.value }))}
+              />
+            </Field>
+            <Field label="Ends">
+              <input
+                type="time"
+                value={draft.endTime || ""}
+                className="field font-mono"
+                onChange={(e) => setDraft((d) => ({ ...d, endTime: e.target.value }))}
+              />
+            </Field>
+          </div>
+          <p className="mt-2 text-xs text-muted">These times only affect how the item appears on the home timeline.</p>
+        </details>
 
         <div className="flex gap-2">
           {existing ? (
@@ -118,7 +161,7 @@ export function HabitDialog({
             </button>
           ) : null}
           <button type="submit" className="min-h-11 flex-1 rounded-xl bg-accent text-sm font-extrabold text-accent-fg">
-            Save habit
+            Save reminder
           </button>
         </div>
       </form>
@@ -138,12 +181,10 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 function DayRow({
   days,
   labels,
-  tone,
   onToggle,
 }: {
   days: number[];
   labels: string[];
-  tone: "accent" | "partial";
   onToggle: (day: number) => void;
 }) {
   return (
@@ -152,13 +193,13 @@ function DayRow({
         const active = days.includes(day);
         return (
           <button
-            key={`${label}-${day}`}
+            key={label}
             type="button"
+            aria-pressed={active}
             onClick={() => onToggle(day)}
             className={cn(
-              "min-h-11 rounded-lg border text-xs font-extrabold",
-              active && tone === "accent" && "border-accent bg-accent text-accent-fg",
-              active && tone === "partial" && "border-partial bg-partial text-partial-fg",
+              "min-h-11 rounded-lg border text-[10px] font-extrabold",
+              active && "border-accent bg-accent text-accent-fg",
               !active && "border-line bg-raised text-muted",
             )}
           >
