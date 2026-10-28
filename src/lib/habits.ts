@@ -1,4 +1,6 @@
 import { LocalNotifications } from "@capacitor/local-notifications";
+import { Filesystem, Directory, Encoding } from "@capacitor/filesystem";
+import { Share } from "@capacitor/share";
 
 export const STORAGE_KEY = "one_percent_loop_v3";
 export const LEGACY_KEY = "one_percent_loop_v2";
@@ -58,14 +60,21 @@ export type Habit = {
   id: string;
   name: string;
   question: string;
-  time: string;
+  /** Session start (display + duration) */
+  startTime: string;
+  /** Session end (display + duration) */
   endTime: string;
+  /** When the notification should fire (independent of start/end) */
+  reminderTime: string;
+  /** @deprecated kept for old backups — mapped to startTime/reminderTime on load */
+  time?: string;
   freqType: FreqType;
   freqDays: number[];
   freqNum: number;
   freqDates: string[];
   reminderDays: number[];
   sticky: boolean;
+  color?: string;
 };
 
 export type CellLog = {
@@ -82,6 +91,22 @@ export type AppData = {
 };
 
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
+
+const PILL_COLORS = [
+  "#3b82f6",
+  "#ec4899",
+  "#a78b6d",
+  "#22c55e",
+  "#64748b",
+  "#8b5cf6",
+  "#f59e0b",
+  "#06b6d4",
+];
+
+export function colorForHabit(h: Habit, index: number): string {
+  if (h.color) return h.color;
+  return PILL_COLORS[index % PILL_COLORS.length];
+}
 
 export function dateKey(offsetDays = 0): string {
   const d = new Date();
@@ -116,18 +141,23 @@ export function format12(time24: string): string {
   const [hS, mS] = time24.split(":");
   let h = parseInt(hS, 10);
   if (Number.isNaN(h)) return time24;
-  const ampm = h >= 12 ? "PM" : "AM";
+  const ampm = h >= 12 ? "pm" : "am";
   h = h % 12 || 12;
-  return `${String(h).padStart(2, "0")}:${mS} ${ampm}`;
+  return `${h}:${mS} ${ampm}`;
 }
 
-/** Home-screen label: "09:00 AM – 11:00 AM" or just start if no end */
-export function timeRangeLabel(h: Habit): string {
-  const start = format12(h.time);
-  if (!h.endTime) return start;
-  const end = format12(h.endTime);
-  if (!end) return start;
-  return `${start} – ${end}`;
+/** e.g. "2 h 30 m" from start/end */
+export function durationLabel(start: string, end: string): string {
+  const a = parseTime(start);
+  const b = parseTime(end);
+  if (!a || !b) return "";
+  let mins = b.hour * 60 + b.minute - (a.hour * 60 + a.minute);
+  if (mins <= 0) mins += 24 * 60;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h === 0) return `${m} m`;
+  if (m === 0) return `${h} h`;
+  return `${h} h ${m} m`;
 }
 
 export function now24(): string {
@@ -157,15 +187,18 @@ function habit(
   id: string,
   name: string,
   question: string,
-  time: string,
+  startTime: string,
+  endTime: string,
+  reminderTime: string,
   extra?: Partial<Habit>,
 ): Habit {
   return {
     id,
     name,
     question,
-    time,
-    endTime: "",
+    startTime,
+    endTime,
+    reminderTime,
     freqType: "daily",
     freqDays: [...ALL_DAYS],
     freqNum: 2,
@@ -196,21 +229,31 @@ function asNumberArray(value: unknown, fallback: number[]): number[] {
   return value.filter((n): n is number => typeof n === "number");
 }
 
-function normalizeHabit(raw: Partial<Habit> & { id?: string; name?: string }): Habit | null {
+function normalizeHabit(raw: Partial<Habit> & { id?: string; name?: string; time?: string }): Habit | null {
   if (!raw.id || !raw.name) return null;
+  const legacy = typeof raw.time === "string" && raw.time.includes(":") ? raw.time : "07:00";
+  const startTime =
+    typeof raw.startTime === "string" && raw.startTime.includes(":") ? raw.startTime : legacy;
+  const endTime =
+    typeof raw.endTime === "string" && raw.endTime.includes(":") ? raw.endTime : "";
+  const reminderTime =
+    typeof raw.reminderTime === "string" && raw.reminderTime.includes(":")
+      ? raw.reminderTime
+      : startTime;
   return {
     id: String(raw.id),
     name: String(raw.name),
     question: typeof raw.question === "string" ? raw.question : "",
-    time: typeof raw.time === "string" && raw.time.includes(":") ? raw.time : "07:00",
-    endTime:
-      typeof raw.endTime === "string" && raw.endTime.includes(":") ? raw.endTime : "",
+    startTime,
+    endTime,
+    reminderTime,
     freqType: raw.freqType ?? "daily",
     freqDays: asNumberArray(raw.freqDays, [...ALL_DAYS]),
     freqNum: typeof raw.freqNum === "number" && raw.freqNum > 0 ? raw.freqNum : 2,
     freqDates: Array.isArray(raw.freqDates) ? raw.freqDates.filter((d) => typeof d === "string") : [],
     reminderDays: asNumberArray(raw.reminderDays, [...ALL_DAYS]),
     sticky: raw.sticky !== false,
+    color: typeof raw.color === "string" ? raw.color : undefined,
   };
 }
 
@@ -235,7 +278,7 @@ export function loadData(): AppData {
       if (normalized) return normalized;
     }
   } catch {
-    /* fall through to defaults */
+    /* fall through */
   }
   const fresh = defaultData();
   saveData(fresh);
@@ -246,12 +289,14 @@ export function saveData(data: AppData) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch {
-    /* private mode / quota */
+    /* private mode */
   }
 }
 
 export function sortedHabits(data: AppData): Habit[] {
-  return [...data.habits].sort((a, b) => (a.time || "00:00").localeCompare(b.time || "00:00"));
+  return [...data.habits].sort((a, b) =>
+    (a.startTime || a.reminderTime || "00:00").localeCompare(b.startTime || b.reminderTime || "00:00"),
+  );
 }
 
 export function cellLog(data: AppData, key: string, habitId: string): CellLog | null {
@@ -260,7 +305,7 @@ export function cellLog(data: AppData, key: string, habitId: string): CellLog | 
 
 export function auditForDate(data: AppData, key: string): string {
   const lines = sortedHabits(data).map((h) => {
-    const time = timeRangeLabel(h);
+    const time = format12(h.startTime);
     const log = cellLog(data, key, h.id);
     if (!log?.status) return `${time} | ${h.name} | UNMARKED`;
     if (log.status === "done") return `${time} | ${h.name} | DONE`;
@@ -308,7 +353,7 @@ export function auditRange(data: AppData, fromKey: string, toKey: string): strin
 }
 
 export function blankHabitDraft(): Habit {
-  return habit("", "", "", "07:00", { endTime: "08:00" });
+  return habit("", "", "", "09:00", "11:00", "09:00");
 }
 
 export async function registerHabitWorker(): Promise<ServiceWorkerRegistration | null> {
@@ -330,7 +375,7 @@ export function habitNotificationId(habitId: string, day: string): number {
 }
 
 function parseTime(time24: string): { hour: number; minute: number } | null {
-  if (!time24.includes(":")) return null;
+  if (!time24 || !time24.includes(":")) return null;
   const [hS, mS] = time24.split(":");
   const hour = parseInt(hS, 10);
   const minute = parseInt(mS, 10);
@@ -343,8 +388,10 @@ function nextFireDate(time24: string): Date | null {
   if (!t) return null;
   const d = new Date();
   d.setSeconds(0, 0);
+  d.setMilliseconds(0);
   d.setHours(t.hour, t.minute, 0, 0);
-  if (d.getTime() <= Date.now() + 2000) {
+  // If this minute already passed, schedule tomorrow
+  if (d.getTime() <= Date.now()) {
     d.setDate(d.getDate() + 1);
   }
   return d;
@@ -373,9 +420,8 @@ export async function ensureNotificationPermission(): Promise<boolean> {
 }
 
 function notifPayload(habitItem: Habit, day: string, at: Date) {
-  const id = habitNotificationId(habitItem.id, day);
   return {
-    id,
+    id: habitNotificationId(habitItem.id, day),
     title: habitItem.name,
     body: " ",
     channelId: "habits",
@@ -389,7 +435,6 @@ function notifPayload(habitItem: Habit, day: string, at: Date) {
   };
 }
 
-/** Immediate sticky notification — title = habit name only */
 export async function notifyHabit(habitItem: Habit): Promise<boolean> {
   try {
     const ok = await ensureNotificationPermission();
@@ -397,7 +442,7 @@ export async function notifyHabit(habitItem: Habit): Promise<boolean> {
     await ensureChannel();
     const today = dateKey(0);
     await LocalNotifications.schedule({
-      notifications: [notifPayload(habitItem, today, new Date(Date.now() + 400))],
+      notifications: [notifPayload(habitItem, today, new Date(Date.now() + 300))],
     });
     return true;
   } catch (err) {
@@ -406,6 +451,7 @@ export async function notifyHabit(habitItem: Habit): Promise<boolean> {
   }
 }
 
+/** Schedule at reminderTime; also re-show sticky ones already due but unmarked */
 export async function scheduleAllHabitNotifications(data: AppData): Promise<void> {
   try {
     const ok = await ensureNotificationPermission();
@@ -413,23 +459,37 @@ export async function scheduleAllHabitNotifications(data: AppData): Promise<void
     await ensureChannel();
 
     const today = dateKey(0);
-    const dow = new Date().getDay();
+    const now = new Date();
+    const dow = now.getDay();
     const list: ReturnType<typeof notifPayload>[] = [];
 
     for (const h of data.habits) {
-      if (!h.time) continue;
+      const remind = h.reminderTime || h.startTime;
+      if (!remind) continue;
       const days = h.reminderDays?.length ? h.reminderDays : ALL_DAYS;
       if (cellLog(data, today, h.id)?.status) continue;
 
-      const fire = nextFireDate(h.time);
-      if (!fire) continue;
+      const t = parseTime(remind);
+      if (!t) continue;
 
+      // If reminder time already passed today and still unmarked → show sticky immediately
+      const todayFire = new Date();
+      todayFire.setSeconds(0, 0);
+      todayFire.setMilliseconds(0);
+      todayFire.setHours(t.hour, t.minute, 0, 0);
+
+      if (days.includes(dow) && todayFire.getTime() <= now.getTime()) {
+        list.push(notifPayload(h, today, new Date(Date.now() + 400)));
+        continue;
+      }
+
+      const fire = nextFireDate(remind);
+      if (!fire) continue;
       const fireDow = fire.getDay();
       if (!days.includes(fireDow)) continue;
-      if (fire.toDateString() === new Date().toDateString() && !days.includes(dow)) continue;
 
       const dayKey =
-        fire.toDateString() === new Date().toDateString() ? today : dateKey(1);
+        fire.toDateString() === now.toDateString() ? today : dateKey(1);
       list.push(notifPayload(h, dayKey, fire));
     }
 
@@ -463,34 +523,32 @@ export function exportDataJson(data: AppData): string {
 
 export function importDataJson(raw: string): AppData | null {
   try {
-    const parsed = JSON.parse(raw) as Partial<AppData>;
-    return normalizeData(parsed);
+    return normalizeData(JSON.parse(raw) as Partial<AppData>);
   } catch {
     return null;
   }
 }
 
-export async function copyText(text: string): Promise<boolean> {
+/** Write JSON to app documents and open the system share sheet (save to Files / Drive) */
+export async function exportHabitsFile(data: AppData): Promise<boolean> {
   try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-    /* fall through */
-  }
-  try {
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.style.position = "fixed";
-    ta.style.left = "-9999px";
-    document.body.appendChild(ta);
-    ta.focus();
-    ta.select();
-    const ok = document.execCommand("copy");
-    document.body.removeChild(ta);
-    return ok;
-  } catch {
+    const json = exportDataJson(data);
+    const name = `1percent-habits-${dateKey(0)}.json`;
+    const written = await Filesystem.writeFile({
+      path: name,
+      data: json,
+      directory: Directory.Cache,
+      encoding: Encoding.UTF8,
+    });
+    await Share.share({
+      title: "Habits backup",
+      text: "1% Habits backup",
+      url: written.uri,
+      dialogTitle: "Save habits backup",
+    });
+    return true;
+  } catch (err) {
+    console.error("exportHabitsFile", err);
     return false;
   }
 }
