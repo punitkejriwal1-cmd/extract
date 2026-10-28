@@ -3,6 +3,8 @@ name: Android APK
 on:
   push:
     branches: [main, master]
+  pull_request:
+    branches: [main, master]
   workflow_dispatch:
   release:
     types: [published]
@@ -29,6 +31,16 @@ jobs:
 
       - name: Install JS dependencies
         run: npm install
+
+      - name: Check TypeScript
+        # Invoke the compiler through Node so CI does not depend on the executable bit
+        # of node_modules/.bin/tsc restored from npm's cache.
+        run: node ./node_modules/typescript/bin/tsc --noEmit
+
+      - name: Run application unit tests
+        # The broad scripts suite depends on workspace-only .grok/ and migrations/ files
+        # that are not present in this Android app checkout. Run the app's shipped TS tests.
+        run: node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/app-data/readiness-schedule.test.ts src/lib/auth/gate-identity.test.ts src/lib/auth/sign-in-gate.test.ts src/lib/preview-path-prefix.test.ts
 
       - name: Build mobile web assets
         run: npm run build:mobile
