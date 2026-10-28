@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
@@ -77,10 +78,10 @@ fun HomeScreen(
                     val done = state.habits.count { h ->
                         state.logsByKey[state.dateKeys.firstOrNull().orEmpty()]?.get(h.id)?.status == "done"
                     }
-                    Text(done.toString(), fontWeight = FontWeight.ExtraBold)
+                    Text("Done: $done", fontWeight = FontWeight.ExtraBold)
                 },
                 actions = {
-                    IconButton(onClick = onCopyLogs) {
+                    IconButton(onClick = onAudit) {
                         Icon(Icons.Default.ContentCopy, contentDescription = "Copy log")
                     }
                     IconButton(onClick = onSettings) {
