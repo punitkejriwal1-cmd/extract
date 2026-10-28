@@ -20,7 +20,7 @@ import java.util.UUID
 data class HomeUiState(
     val habits: List<HabitEntity> = emptyList(),
     val logsByKey: Map<String, Map<String, LogEntity>> = emptyMap(),
-    val dateKeys: List<String> = (0L downTo -1L).map(HabitRepository::dateKey),
+    val dateKeys: List<String> = (0L downTo -1L).map { HabitRepository.dateKey(it) },
 )
 
 class HabitsViewModel(app: Application) : AndroidViewModel(app) {
