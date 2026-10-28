@@ -29,75 +29,71 @@ object NotificationHelper {
                 setShowBadge(true)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
-            context.getSystemService(NotificationManager::class.java)
-                .createNotificationChannel(channel)
+            context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
     }
 
     fun notificationId(habitId: String, dateKey: String): Int {
         var h = 0
-        val s = "$habitId|$dateKey"
-        for (c in s) h = 31 * h + c.code
+        for (c in "$habitId|$dateKey") h = 31 * h + c.code
         return h and 0x7fffffff
     }
 
     fun showSticky(context: Context, habit: HabitEntity, dateKey: String) {
         createChannel(context)
         val id = notificationId(habit.id, dateKey)
-
         val open = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("habitId", habit.id)
             putExtra("dateKey", dateKey)
         }
         val contentPi = PendingIntent.getActivity(
-            context,
-            id,
-            open,
+            context, id, open,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
             .setContentTitle(habit.name)
             .setContentText(" ")
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
-            .setOngoing(true) // cannot swipe away on stock Android
+            .setOngoing(true)
             .setAutoCancel(false)
             .setOnlyAlertOnce(true)
             .setContentIntent(contentPi)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .build()
-
         NotificationManagerCompat.from(context).notify(id, notification)
     }
 
     fun cancel(context: Context, habitId: String, dateKey: String) {
-        NotificationManagerCompat.from(context)
-            .cancel(notificationId(habitId, dateKey))
+        NotificationManagerCompat.from(context).cancel(notificationId(habitId, dateKey))
     }
 
-    /** Schedule exact alarm at reminderTime for today or next matching day */
     fun schedule(context: Context, habit: HabitEntity) {
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val pi = schedulePendingIntent(context, habit.id)
+        // Replacing an edited reminder must remove the previous trigger first.
+        am.cancel(pi)
         val triggerAt = nextTriggerMillis(habit) ?: return
 
-        val intent = Intent(context, ReminderReceiver::class.java).apply {
-            putExtra("habitId", habit.id)
-            putExtra("habitName", habit.name)
-        }
-        val pi = PendingIntent.getBroadcast(
-            context,
-            habit.id.hashCode(),
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
-        } else {
-            am.setExact(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !am.canScheduleExactAlarms()) {
+                // Keep reminders working if exact-alarm access has not been granted.
+                // Android may deliver this less precisely; the UI should explain this limitation.
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+            } else {
+                am.setExact(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+            }
+        } catch (_: SecurityException) {
+            // Permission can be revoked between the check and scheduling call.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+            } else {
+                am.set(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+            }
         }
     }
 
@@ -107,25 +103,32 @@ object NotificationHelper {
 
     fun cancelSchedule(context: Context, habitId: String) {
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = Intent(context, ReminderReceiver::class.java)
-        val pi = PendingIntent.getBroadcast(
-            context,
-            habitId.hashCode(),
-            intent,
+        am.cancel(schedulePendingIntent(context, habitId))
+    }
+
+    private fun schedulePendingIntent(context: Context, habitId: String): PendingIntent {
+        val intent = Intent(context, ReminderReceiver::class.java).apply {
+            action = "com.onepercent.habits.REMINDER.$habitId"
+            putExtra("habitId", habitId)
+        }
+        return PendingIntent.getBroadcast(
+            context, habitId.hashCode(), intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        am.cancel(pi)
     }
 
     private fun nextTriggerMillis(habit: HabitEntity): Long? {
         val parts = habit.reminderTime.split(":")
-        if (parts.size < 2) return null
+        if (parts.size != 2) return null
         val hour = parts[0].toIntOrNull() ?: return null
         val minute = parts[1].toIntOrNull() ?: return null
+        if (hour !in 0..23 || minute !in 0..59) return null
+
         val days = habit.reminderDays.split(",")
-            .mapNotNull { it.trim().toIntOrNull() }
+            .mapNotNull { it.trim().toIntOrNull()?.takeIf { d -> d in 0..6 } }
             .toSet()
-            .ifEmpty { (0..6).toSet() }
+        // An explicitly empty weekday selection means reminders are paused.
+        if (days.isEmpty()) return null
 
         val now = Calendar.getInstance()
         val candidate = Calendar.getInstance().apply {
@@ -134,17 +137,11 @@ object NotificationHelper {
             set(Calendar.HOUR_OF_DAY, hour)
             set(Calendar.MINUTE, minute)
         }
-
-        // Search up to 8 days ahead for next allowed weekday
         for (i in 0..7) {
             if (i > 0) candidate.add(Calendar.DAY_OF_YEAR, 1)
-            val dow = candidate.get(Calendar.DAY_OF_WEEK) // 1=Sun..7=Sat
-            val ourDow = (dow - 1) % 7 // 0=Sun
-            if (ourDow in days && candidate.timeInMillis > now.timeInMillis + 2000) {
+            val weekday = candidate.get(Calendar.DAY_OF_WEEK) - 1 // Sunday=0 ... Saturday=6
+            if (weekday in days && candidate.timeInMillis > now.timeInMillis + 1000) {
                 return candidate.timeInMillis
-            }
-            if (i == 0 && ourDow !in days) {
-                // keep looping
             }
         }
         return null
