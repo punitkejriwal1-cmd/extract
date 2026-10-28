@@ -383,6 +383,8 @@ function parseTime(time24: string): { hour: number; minute: number } | null {
   return { hour, minute };
 }
 
+const pastReminderShown = new Set<string>();
+
 function nextFireDate(time24: string): Date | null {
   const t = parseTime(time24);
   if (!t) return null;
@@ -477,8 +479,12 @@ export async function scheduleAllHabitNotifications(data: AppData): Promise<void
 
         dayDate.setHours(time.hour, time.minute, 0, 0);
         if (offset === 0 && dayDate.getTime() <= now.getTime()) {
-          // If today's reminder time passed and it remains unmarked, surface it now.
-          list.push(notifPayload(h, today, new Date(Date.now() + 400)));
+          // Surface an overdue unmarked reminder once per app session, not on every refresh.
+          const overdueKey = today + "|" + h.id;
+          if (!pastReminderShown.has(overdueKey)) {
+            pastReminderShown.add(overdueKey);
+            list.push(notifPayload(h, today, new Date(Date.now() + 400)));
+          }
         } else {
           list.push(notifPayload(h, dayKey, dayDate));
         }
