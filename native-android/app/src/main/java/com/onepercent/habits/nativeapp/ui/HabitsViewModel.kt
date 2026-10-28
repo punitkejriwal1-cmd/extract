@@ -69,6 +69,7 @@ class HabitsViewModel(app: Application) : AndroidViewModel(app) {
                 sortKey = startTime,
             )
             repo.upsertHabit(entity)
+            NotificationHelper.cancel(ctx, entity.id, HabitRepository.dateKey(0))
             NotificationHelper.schedule(ctx, entity)
         }
     }
@@ -117,7 +118,9 @@ class HabitsViewModel(app: Application) : AndroidViewModel(app) {
     fun importJson(raw: String, onDone: (Boolean) -> Unit) {
         viewModelScope.launch {
             try {
+                val previousHabits = repo.getAllHabits()
                 repo.importJson(raw)
+                previousHabits.forEach { NotificationHelper.cancelSchedule(ctx, it.id) }
                 NotificationHelper.scheduleAll(ctx, repo.getAllHabits())
                 onDone(true)
             } catch (_: Exception) {
