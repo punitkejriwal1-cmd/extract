@@ -28,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlin.random.Random
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.onepercent.habits.nativeapp.data.HabitEntity
@@ -69,7 +70,7 @@ fun HabitEditorScreen(
                 ?: (0..6).toSet(),
         )
     }
-    var color by remember { mutableStateOf(existing?.color ?: COLORS[0]) }
+    var color by remember { mutableStateOf(existing?.color ?: COLORS[Random.nextInt(COLORS.size)]) }
 
     Scaffold(
         topBar = {
@@ -143,17 +144,6 @@ fun HabitEditorScreen(
                             days = if (i in days) days - i else days + i
                         },
                         label = { Text(label) },
-                    )
-                }
-            }
-
-            Text("Color", style = MaterialTheme.typography.labelLarge)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                COLORS.forEach { c ->
-                    FilterChip(
-                        selected = color == c,
-                        onClick = { color = c },
-                        label = { Text("●") },
                     )
                 }
             }
