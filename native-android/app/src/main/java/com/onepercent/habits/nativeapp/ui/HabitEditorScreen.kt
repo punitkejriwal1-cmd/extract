@@ -1,5 +1,6 @@
 package com.onepercent.habits.nativeapp.ui
 
+import android.app.TimePickerDialog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,8 +30,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.onepercent.habits.nativeapp.data.HabitEntity
+import java.util.Calendar
 import kotlin.random.Random
 
 private val DAY_LABELS = listOf("S", "M", "T", "W", "T", "F", "S")
@@ -38,6 +41,16 @@ private val COLORS = listOf(
     0xFF3B82F6, 0xFFEC4899, 0xFFA78B6D, 0xFF22C55E,
     0xFF64748B, 0xFF8B5CF6, 0xFFF59E0B, 0xFF06B6D4,
 )
+
+private fun displayTime(value: String): String {
+    val parts = value.split(":")
+    if (parts.size < 2) return value
+    val hour = parts[0].toIntOrNull() ?: return value
+    val minute = parts[1].toIntOrNull() ?: return value
+    val suffix = if (hour >= 12) "PM" else "AM"
+    val hour12 = when (hour % 12) { 0 -> 12; else -> hour % 12 }
+    return "%d:%02d %s".format(hour12, minute, suffix)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,6 +64,7 @@ fun HabitEditorScreen(
     onDelete: (String) -> Unit,
     onClose: () -> Unit,
 ) {
+    val context = LocalContext.current
     var name by remember(existing?.id) { mutableStateOf(existing?.name.orEmpty()) }
     var question by remember(existing?.id) { mutableStateOf(existing?.question.orEmpty()) }
     var start by remember(existing?.id) { mutableStateOf(existing?.startTime ?: "09:00") }
@@ -60,12 +74,15 @@ fun HabitEditorScreen(
         mutableStateOf(existing?.reminderDays?.split(",")?.mapNotNull { it.trim().toIntOrNull() }?.toSet() ?: (0..6).toSet())
     }
     var color by remember(existing?.id) { mutableStateOf(existing?.color ?: COLORS[Random.nextInt(COLORS.size)]) }
-    var freqType by remember(existing?.id) { mutableStateOf(existing?.freqType ?: "daily") }
-    var freqDays by remember(existing?.id) {
-        mutableStateOf(existing?.freqDays?.split(",")?.mapNotNull { it.trim().toIntOrNull() }?.toSet() ?: (0..6).toSet())
+
+    fun chooseTime(current: String, onSelected: (String) -> Unit) {
+        val parts = current.split(":")
+        val hour = parts.getOrNull(0)?.toIntOrNull()?.coerceIn(0, 23) ?: 9
+        val minute = parts.getOrNull(1)?.toIntOrNull()?.coerceIn(0, 59) ?: 0
+        TimePickerDialog(context, { _, selectedHour, selectedMinute ->
+            onSelected("%02d:%02d".format(selectedHour, selectedMinute))
+        }, hour, minute, false).show()
     }
-    var freqNum by remember(existing?.id) { mutableStateOf(existing?.freqNum ?: 2) }
-    var freqDates by remember(existing?.id) { mutableStateOf(existing?.freqDates.orEmpty()) }
 
     Scaffold(
         topBar = {
@@ -81,76 +98,38 @@ fun HabitEditorScreen(
     ) { padding ->
         Column(
             Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             OutlinedTextField(value = name, onValueChange = { name = it.take(65) }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(value = question, onValueChange = { question = it.take(65) }, label = { Text("Question (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
 
             Text("Session time (display only)", style = MaterialTheme.typography.labelLarge)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = start, onValueChange = { start = it }, label = { Text("Starts (HH:mm)") }, singleLine = true, modifier = Modifier.weight(1f))
-                OutlinedTextField(value = end, onValueChange = { end = it }, label = { Text("Ends (HH:mm)") }, singleLine = true, modifier = Modifier.weight(1f))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { chooseTime(start) { start = it } }, modifier = Modifier.weight(1f)) {
+                    Text("Starts: ${displayTime(start)}")
+                }
+                OutlinedButton(onClick = { chooseTime(end) { end = it } }, modifier = Modifier.weight(1f)) {
+                    Text("Ends: ${displayTime(end)}")
+                }
             }
 
-            Text("Reminder", style = MaterialTheme.typography.labelLarge)
-            OutlinedTextField(
-                value = remind, onValueChange = { remind = it }, label = { Text("Remind me at (HH:mm)") },
-                supportingText = { Text("Independent of start/end — pick any time") },
-                singleLine = true, modifier = Modifier.fillMaxWidth(),
-            )
+            Text("Reminder time", style = MaterialTheme.typography.labelLarge)
+            OutlinedButton(onClick = { chooseTime(remind) { remind = it } }, modifier = Modifier.fillMaxWidth()) {
+                Text("Remind me at  ${displayTime(remind)}")
+            }
+
             Text("Reminder days", style = MaterialTheme.typography.labelLarge)
-            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.fillMaxWidth()) {
                 DAY_LABELS.forEachIndexed { i, label ->
-                    FilterChip(selected = i in days, onClick = { days = if (i in days) days - i else days + i }, label = { Text(label) })
+                    FilterChip(
+                        selected = i in days,
+                        onClick = { days = if (i in days) days - i else days + i },
+                        label = { Text(label) },
+                    )
                 }
             }
 
-            Text("How often", style = MaterialTheme.typography.labelLarge)
-            val frequencyOptions = listOf(
-                "daily" to "Every day", "weekdays_custom" to "Specific weekdays",
-                "every_x_days" to "Every X days", "x_per_week" to "X times/week",
-                "x_per_month" to "X times/month", "specific_dates" to "Specific dates",
-            )
-            frequencyOptions.chunked(2).forEach { rowOptions ->
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    rowOptions.forEach { (value, label) ->
-                        FilterChip(selected = freqType == value, onClick = { freqType = value }, label = { Text(label) })
-                    }
-                }
-            }
-            if (freqType == "weekdays_custom") {
-                Text("Habit days", style = MaterialTheme.typography.labelMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    DAY_LABELS.forEachIndexed { i, label ->
-                        FilterChip(selected = i in freqDays, onClick = {
-                            freqDays = if (i in freqDays) freqDays - i else freqDays + i
-                        }, label = { Text(label) })
-                    }
-                }
-            }
-            if (freqType in setOf("every_x_days", "x_per_week", "x_per_month")) {
-                OutlinedTextField(
-                    value = freqNum.toString(),
-                    onValueChange = { it.toIntOrNull()?.takeIf { n -> n in 1..31 }?.let { n -> freqNum = n } },
-                    label = { Text(when (freqType) {
-                        "every_x_days" -> "Repeat every X days"
-                        "x_per_week" -> "Times per week"
-                        else -> "Times per month"
-                    }) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-            if (freqType == "specific_dates") {
-                OutlinedTextField(
-                    value = freqDates, onValueChange = { freqDates = it },
-                    label = { Text("Dates (YYYY-MM-DD, comma-separated)") },
-                    supportingText = { Text("Example: 2026-11-01, 2026-11-05") },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(4.dp))
             Button(
                 onClick = {
                     if (name.isBlank()) return@Button
@@ -158,9 +137,12 @@ fun HabitEditorScreen(
                         existing?.id, name.trim(), question.trim(),
                         start.ifBlank { "09:00" }, end,
                         remind.ifBlank { start.ifBlank { "09:00" } },
-                        days.sorted().joinToString(","), freqType,
-                        freqDays.sorted().joinToString(","), freqNum.coerceIn(1, 31),
-                        freqDates, color,
+                        days.sorted().joinToString(","),
+                        existing?.freqType ?: "daily",
+                        existing?.freqDays ?: "0,1,2,3,4,5,6",
+                        existing?.freqNum ?: 2,
+                        existing?.freqDates.orEmpty(),
+                        color,
                     )
                 },
                 modifier = Modifier.fillMaxWidth(),
