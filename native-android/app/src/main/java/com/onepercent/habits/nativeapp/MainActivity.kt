@@ -20,6 +20,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.onepercent.habits.nativeapp.data.HabitEntity
 import com.onepercent.habits.nativeapp.ui.HabitEditorScreen
+import com.onepercent.habits.nativeapp.ui.AuditScreen
 import com.onepercent.habits.nativeapp.ui.HabitsViewModel
 import com.onepercent.habits.nativeapp.ui.HomeScreen
 import com.onepercent.habits.nativeapp.ui.SettingsScreen
@@ -62,6 +63,7 @@ class MainActivity : ComponentActivity() {
                             onEdit = { screen = Screen.Edit(it) },
                             onOpenStatus = { id, date -> screen = Screen.Status(id, date) },
                             onSettings = { screen = Screen.Settings },
+                            onCopyLogs = { screen = Screen.Audit },
                         )
                         is Screen.Edit -> HabitEditorScreen(
                             existing = s.habit,
@@ -81,6 +83,7 @@ class MainActivity : ComponentActivity() {
                             vm = vm,
                             onClose = { screen = Screen.Home },
                         )
+                        Screen.Audit -> AuditScreen(vm = vm, onClose = { screen = Screen.Home })
                         Screen.Settings -> SettingsScreen(
                             dark = dark,
                             onToggleDark = {
@@ -128,4 +131,5 @@ private sealed class Screen {
     data class Edit(val habit: HabitEntity?) : Screen()
     data class Status(val habitId: String, val dateKey: String) : Screen()
     data object Settings : Screen()
+    data object Audit : Screen()
 }
