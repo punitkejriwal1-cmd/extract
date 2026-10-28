@@ -71,7 +71,7 @@ fun HomeScreen(
                             fontWeight = FontWeight.Bold,
                         )
                         Spacer(Modifier.width(6.dp))
-                        Text("Habits", fontWeight = FontWeight.ExtraBold)
+                        Text("One Percent Habits", fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Spacer(Modifier.width(8.dp))
                         val done = state.habits.count { h ->
                             (state.logsByKey[state.dateKeys.firstOrNull().orEmpty()]?.get(h.id)?.status)
@@ -165,7 +165,6 @@ private fun HabitRow(
 ) {
     val start = format12(habit.startTime)
     val end = if (habit.endTime.isNotBlank()) format12(habit.endTime) else ""
-    val dur = durationLabel(habit.startTime, habit.endTime)
     val pill = Color(habit.color)
 
     Row(
@@ -194,14 +193,6 @@ private fun HabitRow(
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                )
-            }
-            if (dur.isNotEmpty()) {
-                Text(
-                    dur,
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp, start = 4.dp),
                 )
             }
         }
