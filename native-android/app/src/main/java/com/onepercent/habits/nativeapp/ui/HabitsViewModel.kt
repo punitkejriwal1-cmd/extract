@@ -18,6 +18,8 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.UUID
+import org.json.JSONArray
+import org.json.JSONObject
 
 data class HomeUiState(
     val habits: List<HabitEntity> = emptyList(),
@@ -165,7 +167,11 @@ class HabitsViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    suspend fun exportJson(): String = repo.exportJson()
+    suspend fun exportJson(): String {
+        val root = JSONObject(repo.exportJson())
+        root.put("reasonsList", JSONArray(_reasons.value))
+        return root.toString(2)
+    }
 
     suspend fun buildAuditText(mode: String, from: String, to: String): String {
         val habits = repo.getAllHabits().sortedBy { it.startTime }
@@ -217,6 +223,14 @@ class HabitsViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val previousHabits = repo.getAllHabits()
                 repo.importJson(raw)
+                val savedReasons = runCatching {
+                    val arr = JSONObject(raw).optJSONArray("reasonsList")
+                    if (arr == null) null else (0 until arr.length()).mapNotNull { arr.optString(it).trim().takeIf(String::isNotBlank) }
+                }.getOrNull()
+                if (savedReasons != null) {
+                    _reasons.value = savedReasons.distinct()
+                    prefs.edit().putStringSet("reasons", _reasons.value.toSet()).apply()
+                }
                 previousHabits.forEach { NotificationHelper.cancelSchedule(ctx, it.id) }
                 NotificationHelper.scheduleAll(ctx, repo.getAllHabits())
                 onDone(true)
