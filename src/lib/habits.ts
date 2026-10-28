@@ -452,54 +452,51 @@ export async function notifyHabit(habitItem: Habit): Promise<boolean> {
 }
 
 /** Schedule at reminderTime; also re-show sticky ones already due but unmarked */
+/** Keep the next seven days of reminders queued so Android can fire them while the app is closed. */
 export async function scheduleAllHabitNotifications(data: AppData): Promise<void> {
   try {
     const ok = await ensureNotificationPermission();
     if (!ok) return;
     await ensureChannel();
 
-    const today = dateKey(0);
     const now = new Date();
-    const dow = now.getDay();
+    const today = dateKey(0);
     const list: ReturnType<typeof notifPayload>[] = [];
 
     for (const h of data.habits) {
       const remind = h.reminderTime || h.startTime;
-      if (!remind) continue;
-      const days = h.reminderDays?.length ? h.reminderDays : ALL_DAYS;
-      if (cellLog(data, today, h.id)?.status) continue;
+      const time = parseTime(remind);
+      const days = Array.isArray(h.reminderDays) ? h.reminderDays : ALL_DAYS;
+      if (!time || days.length === 0) continue;
 
-      const t = parseTime(remind);
-      if (!t) continue;
+      for (let offset = 0; offset < 7; offset += 1) {
+        const dayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+        const dayKey = dateKey(offset);
+        if (!days.includes(dayDate.getDay())) continue;
+        if (cellLog(data, dayKey, h.id)?.status) continue;
 
-      // If reminder time already passed today and still unmarked → show sticky immediately
-      const todayFire = new Date();
-      todayFire.setSeconds(0, 0);
-      todayFire.setMilliseconds(0);
-      todayFire.setHours(t.hour, t.minute, 0, 0);
-
-      if (days.includes(dow) && todayFire.getTime() <= now.getTime()) {
-        list.push(notifPayload(h, today, new Date(Date.now() + 400)));
-        continue;
+        dayDate.setHours(time.hour, time.minute, 0, 0);
+        if (offset === 0 && dayDate.getTime() <= now.getTime()) {
+          // If today's reminder time passed and it remains unmarked, surface it now.
+          list.push(notifPayload(h, today, new Date(Date.now() + 400)));
+        } else {
+          list.push(notifPayload(h, dayKey, dayDate));
+        }
       }
-
-      const fire = nextFireDate(remind);
-      if (!fire) continue;
-      const fireDow = fire.getDay();
-      if (!days.includes(fireDow)) continue;
-
-      const dayKey =
-        fire.toDateString() === now.toDateString() ? today : dateKey(1);
-      list.push(notifPayload(h, dayKey, fire));
     }
 
-    if (list.length === 0) return;
+    // Reconcile the entire pending queue, not just IDs in the new list, so edits and
+    // deleted habits cannot leave old reminders behind.
+    const pending = await LocalNotifications.getPending().catch(() => ({ notifications: [] }));
+    if (pending.notifications.length) {
+      await LocalNotifications.cancel({
+        notifications: pending.notifications.map((n) => ({ id: n.id })),
+      });
+    }
 
-    await LocalNotifications.cancel({
-      notifications: list.map((n) => ({ id: n.id })),
-    }).catch(() => undefined);
-
-    await LocalNotifications.schedule({ notifications: list });
+    if (list.length) {
+      await LocalNotifications.schedule({ notifications: list });
+    }
   } catch (err) {
     console.error("scheduleAllHabitNotifications error:", err);
   }
