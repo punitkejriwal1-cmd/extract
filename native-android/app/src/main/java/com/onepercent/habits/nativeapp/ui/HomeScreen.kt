@@ -18,7 +18,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
@@ -81,7 +80,7 @@ fun HomeScreen(
                     Text("Done: $done", fontWeight = FontWeight.ExtraBold)
                 },
                 actions = {
-                    IconButton(onClick = onAudit) {
+                    IconButton(onClick = onCopyLogs) {
                         Icon(Icons.Default.ContentCopy, contentDescription = "Copy log")
                     }
                     IconButton(onClick = onSettings) {
