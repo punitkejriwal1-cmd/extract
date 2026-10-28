@@ -206,10 +206,10 @@ private fun HabitRow(
                 )
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(if (dateKeys.size >= 6) 2.dp else 4.dp)) {
             dateKeys.forEach { key ->
                 val log = logsByKey[key]?.get(habit.id)
-                StatusCell(log) { onCell(key) }
+                StatusCell(log, dayCellSize) { onCell(key) }
             }
         }
     }
@@ -231,15 +231,15 @@ private fun StatusCell(log: LogEntity?, size: androidx.compose.ui.unit.Dp, onCli
     }
     Box(
         Modifier
-            .size(40.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .size(size)
+            .clip(RoundedCornerShape(if (size < 30.dp) 7.dp else 12.dp))
             .background(bg)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         when (log?.status) {
             "done" -> Icon(Icons.Default.Check, null, tint = fg, modifier = Modifier.size(if (size < 30.dp) 13.dp else 18.dp))
-            "missed" -> Icon(Icons.Default.Close, null, tint = fg, modifier = Modifier.size(18.dp))
+            "missed" -> Icon(Icons.Default.Close, null, tint = fg, modifier = Modifier.size(if (size < 30.dp) 13.dp else 18.dp))
             "partial" -> Text("${log.partialPct.coerceAtLeast(10)}%", color = fg, fontSize = if (size < 30.dp) 8.sp else 11.sp, fontWeight = FontWeight.Bold)
             else -> Text("·", color = fg)
         }
