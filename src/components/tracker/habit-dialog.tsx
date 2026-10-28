@@ -292,7 +292,7 @@ function DayRow({
   onToggle: (day: number) => void;
 }) {
   return (
-    <div className="grid grid-cols-7 gap-1">
+    <div className="flex min-w-0 gap-1 overflow-x-auto pb-1" role="group" aria-label="Select days">
       {labels.map((label, day) => {
         const active = days.includes(day);
         return (
@@ -301,7 +301,7 @@ function DayRow({
             type="button"
             onClick={() => onToggle(day)}
             className={cn(
-              "min-h-11 rounded-lg border text-xs font-extrabold",
+              "min-h-11 min-w-[2.75rem] shrink-0 rounded-lg border px-2 text-xs font-extrabold",
               active && tone === "accent" && "border-accent bg-accent text-accent-fg",
               active && tone === "partial" && "border-partial bg-partial text-partial-fg",
               !active && "border-line bg-raised text-muted",
