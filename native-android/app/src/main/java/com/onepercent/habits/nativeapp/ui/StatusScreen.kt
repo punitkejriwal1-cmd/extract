@@ -13,6 +13,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -41,6 +42,11 @@ fun StatusScreen(
 
     var status by remember { mutableStateOf(existing?.status) }
     var pct by remember { mutableFloatStateOf((existing?.partialPct ?: 50).toFloat()) }
+    var reasonsText by remember { mutableStateOf(existing?.reasons.orEmpty()) }
+    var note by remember { mutableStateOf(existing?.note.orEmpty()) }
+    var customReason by remember { mutableStateOf("") }
+    val commonReasons = listOf("Overslept", "Previous Task Overran", "Phone Distraction", "Low Energy / Tired", "Procrastinated", "Urgent Work")
+    val selectedReasons = reasonsText.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
 
     Scaffold(
         topBar = {
@@ -98,6 +104,27 @@ fun StatusScreen(
             }
 
             if (status == "partial" || status == "missed") {
+                Text("Reason for not completing", style = MaterialTheme.typography.titleSmall)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    commonReasons.forEach { reason ->
+                        FilterChip(
+                            selected = reason in selectedReasons,
+                            onClick = {
+                                val next = if (reason in selectedReasons) selectedReasons - reason else selectedReasons + reason
+                                reasonsText = next.joinToString(", ")
+                            },
+                            label = { Text(reason) },
+                        )
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(value = customReason, onValueChange = { customReason = it }, label = { Text("Other reason") }, singleLine = true, modifier = Modifier.weight(1f))
+                    Button(onClick = {
+                        val value = customReason.trim()
+                        if (value.isNotEmpty()) { reasonsText = (selectedReasons + value).joinToString(", "); customReason = "" }
+                    }) { Text("Add") }
+                }
+                OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("Note (optional)") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
                 Button(
                     onClick = {
                         vm.mark(
@@ -105,6 +132,8 @@ fun StatusScreen(
                             dateKey,
                             status!!,
                             partialPct = if (status == "partial") pct.toInt() else 0,
+                            reasons = reasonsText,
+                            note = note,
                         )
                         onClose()
                     },
