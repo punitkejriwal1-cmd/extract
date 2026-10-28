@@ -2,16 +2,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Sheet } from "@/components/tracker/sheet";
 import { cn } from "@/lib/cn";
 import { useHabits } from "@/lib/habit-store";
-import { DAY_NAMES, type FreqType, type Habit, blankHabitDraft } from "@/lib/habits";
-
-const FREQ_OPTIONS: { value: FreqType; label: string }[] = [
-  { value: "daily", label: "Every day" },
-  { value: "weekdays_custom", label: "Specific days of the week" },
-  { value: "every_x_days", label: "Every X days" },
-  { value: "x_per_week", label: "X times per week" },
-  { value: "x_per_month", label: "X times per month" },
-  { value: "specific_dates", label: "Specific calendar dates" },
-];
+import { type Habit, blankHabitDraft } from "@/lib/habits";
 
 export function HabitDialog({
   habitId,
@@ -30,7 +21,6 @@ export function HabitDialog({
   const existing = data.habits.find((h) => h.id === habitId) ?? null;
 
   const [draft, setDraft] = useState<Habit>(blankHabitDraft());
-  const [dateInput, setDateInput] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -42,21 +32,21 @@ export function HabitDialog({
             startTime: found.startTime || found.reminderTime || "09:00",
             endTime: found.endTime || "",
             reminderTime: found.reminderTime || found.startTime || "09:00",
-            freqDays: [...found.freqDays],
-            freqDates: [...found.freqDates],
+            freqDays: [...found.reminderDays],
+            freqDates: [],
             reminderDays: [...found.reminderDays],
           }
         : blankHabitDraft(),
     );
-    setDateInput("");
   }, [open, habitId]);
 
-  function toggleDay(key: "freqDays" | "reminderDays", day: number) {
+  function toggleDay(day: number) {
     setDraft((d) => {
-      const has = d[key].includes(day);
-      if (key === "freqDays" && has && d.freqDays.length === 1) return d;
-      const next = has ? d[key].filter((n) => n !== day) : [...d[key], day].sort((a, b) => a - b);
-      return { ...d, [key]: next };
+      const has = d.reminderDays.includes(day);
+      const next = has
+        ? d.reminderDays.filter((n) => n !== day)
+        : [...d.reminderDays, day].sort((a, b) => a - b);
+      return { ...d, reminderDays: next, freqDays: next };
     });
   }
 
@@ -72,21 +62,15 @@ export function HabitDialog({
       startTime: draft.startTime,
       endTime: draft.endTime || "",
       reminderTime: draft.reminderTime || draft.startTime,
-      freqNum: Math.min(31, Math.max(1, Number(draft.freqNum) || 2)),
+      freqType: draft.reminderDays.length === 7 ? "daily" : "weekdays_custom",
+      freqDays: [...draft.reminderDays],
+      freqDates: [],
+      freqNum: 2,
       sticky: true,
     });
     showToast("Saved");
     onClose();
   }
-
-  const numberCopy =
-    draft.freqType === "every_x_days"
-      ? { prefix: "Every", suffix: "days" }
-      : draft.freqType === "x_per_week"
-        ? { prefix: "", suffix: "times per week" }
-        : draft.freqType === "x_per_month"
-          ? { prefix: "", suffix: "times per month" }
-          : null;
 
   return (
     <Sheet
@@ -117,136 +101,7 @@ export function HabitDialog({
           />
         </Field>
 
-        <section className="space-y-3 rounded-xl border border-line bg-chip/60 p-3">
-          <div className="text-xs font-bold tracking-wide text-muted uppercase">Session time (for display)</div>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Starts">
-              <input
-                type="time"
-                required
-                value={draft.startTime}
-                className="field font-mono font-bold"
-                onChange={(e) => setDraft((d) => ({ ...d, startTime: e.target.value }))}
-              />
-            </Field>
-            <Field label="Ends">
-              <input
-                type="time"
-                value={draft.endTime || ""}
-                className="field font-mono font-bold"
-                onChange={(e) => setDraft((d) => ({ ...d, endTime: e.target.value }))}
-              />
-            </Field>
-          </div>
-          <p className="text-xs text-muted">Shown on the home timeline. Not used for the alarm.</p>
-        </section>
 
-        <section className="space-y-3 rounded-xl border border-line bg-chip/60 p-3">
-          <div className="text-xs font-bold tracking-wide text-muted uppercase">Reminder</div>
-          <Field label="Remind me at">
-            <input
-              type="time"
-              required
-              value={draft.reminderTime}
-              className="field font-mono font-bold"
-              onChange={(e) => setDraft((d) => ({ ...d, reminderTime: e.target.value }))}
-            />
-          </Field>
-          <p className="text-xs text-muted">
-            Choose any time — start, middle, or end of the session. Notification fires only at this time.
-          </p>
-          <div>
-            <div className="mb-2 text-xs font-bold tracking-wide text-muted uppercase">Reminder days</div>
-            <DayRow
-              days={draft.reminderDays}
-              labels={["S", "M", "T", "W", "T", "F", "S"]}
-              tone="partial"
-              onToggle={(day) => toggleDay("reminderDays", day)}
-            />
-          </div>
-        </section>
-
-        <section className="space-y-3 rounded-xl border border-line bg-chip/60 p-3">
-          <Field label="How often">
-            <select
-              className="field font-bold"
-              value={draft.freqType}
-              onChange={(e) => setDraft((d) => ({ ...d, freqType: e.target.value as FreqType }))}
-            >
-              {FREQ_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          {draft.freqType === "weekdays_custom" ? (
-            <DayRow
-              days={draft.freqDays}
-              labels={DAY_NAMES.map((d) => d)}
-              tone="accent"
-              onToggle={(day) => toggleDay("freqDays", day)}
-            />
-          ) : null}
-
-          {numberCopy ? (
-            <div className="flex items-center gap-2 text-sm font-semibold text-ink">
-              {numberCopy.prefix ? <span>{numberCopy.prefix}</span> : null}
-              <input
-                type="number"
-                min={1}
-                max={31}
-                value={draft.freqNum}
-                className="field w-20 text-center font-mono"
-                onChange={(e) => setDraft((d) => ({ ...d, freqNum: Number(e.target.value) }))}
-              />
-              <span>{numberCopy.suffix}</span>
-            </div>
-          ) : null}
-
-          {draft.freqType === "specific_dates" ? (
-            <div className="space-y-2">
-              <div className="flex gap-2">
-                <input
-                  type="date"
-                  value={dateInput}
-                  className="field font-mono"
-                  onChange={(e) => setDateInput(e.target.value)}
-                />
-                <button
-                  type="button"
-                  className="min-h-11 shrink-0 rounded-xl bg-accent px-3 text-sm font-bold text-accent-fg"
-                  onClick={() => {
-                    if (!dateInput || draft.freqDates.includes(dateInput)) return;
-                    setDraft((d) => ({ ...d, freqDates: [...d.freqDates, dateInput].sort() }));
-                    setDateInput("");
-                  }}
-                >
-                  Add date
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {draft.freqDates.map((dt) => (
-                  <span
-                    key={dt}
-                    className="inline-flex items-center gap-1 rounded-lg bg-accent/15 px-2 py-1 font-mono text-xs font-bold text-accent"
-                  >
-                    {dt}
-                    <button
-                      type="button"
-                      aria-label={`Remove ${dt}`}
-                      className="px-1"
-                      onClick={() => setDraft((d) => ({ ...d, freqDates: d.freqDates.filter((x) => x !== dt) }))}
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </section>
 
         <div className="flex gap-2">
           {existing ? (
