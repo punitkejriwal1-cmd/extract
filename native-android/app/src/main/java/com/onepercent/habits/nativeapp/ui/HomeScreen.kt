@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -56,6 +57,7 @@ fun HomeScreen(
     onEdit: (HabitEntity) -> Unit,
     onOpenStatus: (habitId: String, dateKey: String) -> Unit,
     onSettings: () -> Unit,
+    onCopyLogs: () -> Unit,
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
     val dayCellSize = when (state.dateKeys.size) {
@@ -72,27 +74,15 @@ fun HomeScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            "1%",
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text("One Percent Habits", fontWeight = FontWeight.ExtraBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Spacer(Modifier.width(8.dp))
-                        val done = state.habits.count { h ->
-                            (state.logsByKey[state.dateKeys.firstOrNull().orEmpty()]?.get(h.id)?.status)
-                                .let { it == "done" || it == "partial" }
-                        }
-                        Text(
-                            "$done/${state.habits.size}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    val done = state.habits.count { h ->
+                        state.logsByKey[state.dateKeys.firstOrNull().orEmpty()]?.get(h.id)?.status == "done"
                     }
+                    Text(done.toString(), fontWeight = FontWeight.ExtraBold)
                 },
                 actions = {
+                    IconButton(onClick = onCopyLogs) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy log")
+                    }
                     IconButton(onClick = onSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
