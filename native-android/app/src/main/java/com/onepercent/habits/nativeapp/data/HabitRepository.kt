@@ -18,6 +18,7 @@ class HabitRepository(private val db: AppDatabase) {
     suspend fun setLog(log: LogEntity) = logs.upsert(log)
     suspend fun clearLog(dateKey: String, habitId: String) = logs.clear(dateKey, habitId)
     suspend fun getAllHabits(): List<HabitEntity> = habits.getAll()
+    suspend fun getAllLogs(): List<LogEntity> = logs.getAll()
     suspend fun getLog(dateKey: String, habitId: String): LogEntity? = logs.getForDateAndHabit(dateKey, habitId)
 
     suspend fun exportJson(): String {
