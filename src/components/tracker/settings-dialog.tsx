@@ -1,8 +1,9 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Sheet } from "@/components/tracker/sheet";
 import { cn } from "@/lib/cn";
 import { useHabits } from "@/lib/habit-store";
 import {
+  THEME_KEY,
   exportHabitsFile,
   importDataJson,
   scheduleAllHabitNotifications,
@@ -17,9 +18,21 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
   const showToast = useHabits((s) => s.showToast);
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [dark, setDark] = useState(true);
+
+  useEffect(() => {
+    if (!open) return;
+    setDark(localStorage.getItem(THEME_KEY) !== "light");
+  }, [open]);
 
   const percent = Math.round(prefs.fontScale * 100);
   const previous = prefs.visibleDays - 1;
+
+  function setTheme(nextDark: boolean) {
+    setDark(nextDark);
+    document.documentElement.classList.toggle("dark", nextDark);
+    localStorage.setItem(THEME_KEY, nextDark ? "dark" : "light");
+  }
 
   async function handleExport() {
     setBusy(true);
@@ -70,6 +83,37 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
       title="Settings"
     >
       <section className="space-y-3 rounded-xl bg-chip p-3">
+        <h3 className="text-sm font-bold text-ink">Theme</h3>
+        <p className="text-sm text-pretty text-muted">
+          Dark uses pure black for OLED screens to save battery.
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            aria-pressed={dark}
+            onClick={() => setTheme(true)}
+            className={cn(
+              "min-h-11 rounded-xl border text-sm font-bold",
+              dark ? "border-accent bg-accent text-accent-fg" : "border-line bg-raised text-muted",
+            )}
+          >
+            Dark (OLED)
+          </button>
+          <button
+            type="button"
+            aria-pressed={!dark}
+            onClick={() => setTheme(false)}
+            className={cn(
+              "min-h-11 rounded-xl border text-sm font-bold",
+              !dark ? "border-accent bg-accent text-accent-fg" : "border-line bg-raised text-muted",
+            )}
+          >
+            Light
+          </button>
+        </div>
+      </section>
+
+      <section className="mt-3 space-y-3 rounded-xl bg-chip p-3">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-sm font-bold text-ink">Text size</h3>
           <span className="font-mono text-xs font-bold text-accent tabular-nums">{percent}%</span>

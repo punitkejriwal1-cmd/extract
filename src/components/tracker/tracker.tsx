@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import { Check, ClipboardList, Moon, Plus, Settings, Sun, X } from "lucide-react";
+import { Check, ClipboardList, Plus, Settings, X } from "lucide-react";
 import { AuditDialog } from "@/components/tracker/audit-dialog";
 import { HabitDialog } from "@/components/tracker/habit-dialog";
 import { SettingsDialog } from "@/components/tracker/settings-dialog";
@@ -30,7 +30,6 @@ export function Tracker() {
   const ready = useHabits((s) => s.ready);
   const toast = useHabits((s) => s.toast);
   const hydrate = useHabits((s) => s.hydrate);
-  const [dark, setDark] = useState(true);
   const [status, setStatus] = useState<{ dateKey: string; habitId: string } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -44,7 +43,6 @@ export function Tracker() {
   useEffect(() => {
     hydrate();
     const light = localStorage.getItem(THEME_KEY) === "light";
-    setDark(!light);
     document.documentElement.classList.toggle("dark", !light);
     void registerHabitWorker();
   }, [hydrate]);
@@ -54,7 +52,6 @@ export function Tracker() {
     void scheduleAllHabitNotifications(data);
   }, [ready, data.habits]);
 
-  // Re-apply sticky notifications every minute (covers swipe-away on Realme)
   useEffect(() => {
     if (!ready) return;
     const id = window.setInterval(() => {
@@ -137,13 +134,6 @@ export function Tracker() {
     return () => window.clearInterval(id);
   }, [ready]);
 
-  function toggleTheme() {
-    const next = !dark;
-    setDark(next);
-    document.documentElement.classList.toggle("dark", next);
-    localStorage.setItem(THEME_KEY, next ? "dark" : "light");
-  }
-
   const habits = sortedHabits(data);
   const today = dateKey(0);
   const columns = Array.from({ length: prefs.visibleDays }, (_, index) => dateKey(-index));
@@ -176,13 +166,10 @@ export function Tracker() {
             <IconButton label="Settings" onClick={() => setSettingsOpen(true)}>
               <Settings className="size-4" />
             </IconButton>
-            <IconButton label={dark ? "Switch to light mode" : "Switch to dark mode"} onClick={toggleTheme}>
-              {dark ? <Sun className="size-4 text-partial" /> : <Moon className="size-4" />}
-            </IconButton>
           </div>
         </div>
         <div className="flex items-center justify-between gap-2 px-3 pb-2 text-xs font-bold text-muted">
-          <span className="w-16 shrink-0">Time</span>
+          <span className="w-[4.5rem] shrink-0">Time</span>
           <span className="flex-1">Habit</span>
           <div className="grid shrink-0 text-center" style={track.style}>
             {columns.map((key, index) => {
@@ -209,12 +196,16 @@ export function Tracker() {
             {habits.map((habit, index) => {
               const dur = durationLabel(habit.startTime, habit.endTime);
               const pill = colorForHabit(habit, index);
+              const end = habit.endTime ? format12(habit.endTime) : "";
               return (
                 <div key={habit.id} className="flex items-stretch gap-2 px-3 py-3">
-                  <div className="flex w-16 shrink-0 flex-col pt-1">
+                  <div className="flex w-[4.5rem] shrink-0 flex-col pt-1 leading-tight">
                     <span className="text-xs font-semibold text-muted tabular-nums">
                       {format12(habit.startTime)}
                     </span>
+                    {end ? (
+                      <span className="text-[11px] font-medium text-muted/80 tabular-nums">{end}</span>
+                    ) : null}
                   </div>
                   <button
                     type="button"

@@ -52,13 +52,14 @@
   color-scheme: light;
 }
 
+/* OLED-friendly pure black dark theme */
 .dark {
-  --canvas: #0e0e0e;
-  --surface: #161616;
-  --raised: #1e1e1e;
+  --canvas: #000000;
+  --surface: #000000;
+  --raised: #0a0a0a;
   --ink: #f5f5f4;
   --muted: #a3a3a3;
-  --line: #2c2c2c;
+  --line: #1a1a1a;
   --accent: #818cf8;
   --accent-fg: #0f1020;
   --done: #34d399;
@@ -67,8 +68,8 @@
   --partial-fg: #1c1404;
   --missed: #fb7185;
   --missed-fg: #2a0a12;
-  --chip: #262626;
-  --log: #0c100e;
+  --chip: #111111;
+  --log: #000000;
   --log-fg: #86efac;
   --toast: #34d399;
   --toast-fg: #052e22;
