@@ -33,7 +33,9 @@ jobs:
         run: npm install
 
       - name: Check TypeScript
-        run: npm run typecheck
+        # Invoke the compiler through Node so CI does not depend on the executable bit
+        # of node_modules/.bin/tsc restored from npm's cache.
+        run: node ./node_modules/typescript/bin/tsc --noEmit
 
       - name: Run tests
         run: npm test
