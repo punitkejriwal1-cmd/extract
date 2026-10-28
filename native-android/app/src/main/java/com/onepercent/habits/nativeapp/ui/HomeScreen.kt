@@ -152,6 +152,7 @@ fun HomeScreen(
                         HabitRow(
                             habit = habit,
                             dateKeys = state.dateKeys,
+                            dayCellSize = dayCellSize,
                             logsByKey = state.logsByKey,
                             onEdit = { onEdit(habit) },
                             onCell = { dateKey -> onOpenStatus(habit.id, dateKey) },
@@ -167,6 +168,7 @@ fun HomeScreen(
 private fun HabitRow(
     habit: HabitEntity,
     dateKeys: List<String>,
+    dayCellSize: androidx.compose.ui.unit.Dp,
     logsByKey: Map<String, Map<String, LogEntity>>,
     onEdit: () -> Unit,
     onCell: (String) -> Unit,
