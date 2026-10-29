@@ -241,10 +241,11 @@ private fun StatusCell(log: LogEntity?, size: Dp, onClick: () -> Unit) {
 }
 
 private fun buildTimeline(habits: List<HabitEntity>, wake: String, sleep: String): List<TimelineBlock> {
-    val wakeMin = parseMinutes(wake) ?: 300
-    val sleepMin = parseMinutes(sleep) ?: 1260
-    val start = minOf(wakeMin, sleepMin - 1)
-    val end = maxOf(sleepMin, start + 1)
+    val requestedWake = parseMinutes(wake) ?: 300
+    val requestedSleep = parseMinutes(sleep) ?: 1260
+    val validSchedule = requestedSleep > requestedWake
+    val start = if (validSchedule) requestedWake else 300
+    val end = if (validSchedule) requestedSleep else 1260
     val sorted = habits.mapNotNull { h ->
         val a = parseMinutes(h.startTime) ?: return@mapNotNull null
         val b = parseMinutes(h.endTime) ?: return@mapNotNull null
