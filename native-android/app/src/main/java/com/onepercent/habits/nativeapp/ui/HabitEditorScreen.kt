@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -36,7 +38,7 @@ import com.onepercent.habits.nativeapp.data.HabitEntity
 import java.util.Calendar
 import kotlin.random.Random
 
-private val DAY_LABELS = listOf("S", "M", "T", "W", "T", "F", "S")
+private val DAY_LABELS = listOf("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
 private val COLORS = listOf(
     0xFF3B82F6, 0xFFEC4899, 0xFFA78B6D, 0xFF22C55E,
     0xFF64748B, 0xFF8B5CF6, 0xFFF59E0B, 0xFF06B6D4,
@@ -97,7 +99,7 @@ fun HabitEditorScreen(
         },
     ) { padding ->
         Column(
-            Modifier.fillMaxSize().padding(padding).padding(16.dp).verticalScroll(rememberScrollState()),
+            Modifier.fillMaxSize().padding(padding).imePadding().padding(16.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             OutlinedTextField(value = name, onValueChange = { name = it.take(65) }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -119,7 +121,7 @@ fun HabitEditorScreen(
             }
 
             Text("Reminder days", style = MaterialTheme.typography.labelLarge)
-            Row(horizontalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
                 DAY_LABELS.forEachIndexed { i, label ->
                     FilterChip(
                         selected = i in days,
