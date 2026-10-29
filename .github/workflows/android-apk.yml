@@ -2,9 +2,9 @@ name: Native Android APK
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, native-android-final, native-android-timetable-v1.1]
   pull_request:
-    branches: [main, master]
+    branches: [main, master, native-android-final]
   workflow_dispatch:
   release:
     types: [published]

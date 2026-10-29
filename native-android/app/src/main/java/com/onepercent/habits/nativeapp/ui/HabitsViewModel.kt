@@ -168,30 +168,51 @@ class HabitsViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     suspend fun buildAuditText(mode: String, from: String, to: String): String {
+        val settings = ctx.getSharedPreferences("app_settings", android.content.Context.MODE_PRIVATE)
+        val wake = settings.getString("wake_up_time", "05:00") ?: "05:00"
+        val sleep = settings.getString("sleep_time", "21:00") ?: "21:00"
+        val requestedWake = parseMinutes(wake) ?: 300
+        val requestedSleep = parseMinutes(sleep) ?: 1260
+        val validSchedule = requestedSleep > requestedWake
+        val wakeMinute = if (validSchedule) requestedWake else 300
+        val sleepMinute = if (validSchedule) requestedSleep else 1260
         val habits = repo.getAllHabits().sortedBy { it.startTime }
         val logs = repo.getAllLogs().associateBy { it.dateKey to it.habitId }
         val today = LocalDate.now()
-        val start: LocalDate
-        val end: LocalDate
+        val startDate: LocalDate
+        val endDate: LocalDate
         when (mode) {
-            "today" -> { start = today; end = today }
-            "yesterday" -> { start = today.minusDays(1); end = start }
+            "today" -> { startDate = today; endDate = today }
+            "yesterday" -> { startDate = today.minusDays(1); endDate = startDate }
             else -> {
                 val a = runCatching { LocalDate.parse(from) }.getOrDefault(today.minusDays(6))
                 val b = runCatching { LocalDate.parse(to) }.getOrDefault(today)
-                start = minOf(a, b)
-                end = minOf(maxOf(a, b), today)
+                startDate = minOf(a, b)
+                endDate = minOf(maxOf(a, b), today)
             }
         }
         val lines = mutableListOf<String>()
-        var date = start
+        var date = startDate
         var count = 0
-        while (!date.isAfter(end) && count < 62) {
+        while (!date.isAfter(endDate) && count < 62) {
             val key = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
             lines += "Date: ${date.format(DateTimeFormatter.ofPattern("EEE, dd MMM yyyy"))}"
-            habits.forEach { habit ->
+            lines += "${format12(wake)} | Wake-up"
+            var cursor = wakeMinute
+            val scheduled = habits.mapNotNull { habit ->
+                val a = parseMinutes(habit.startTime) ?: return@mapNotNull null
+                val b = parseMinutes(habit.endTime) ?: return@mapNotNull null
+                if (a < wakeMinute || a >= sleepMinute || b <= a) return@mapNotNull null
+                Triple(habit, a, minOf(b, sleepMinute)).takeIf { it.third > it.second }
+            }
+            scheduled.forEach { (habit, a, b) ->
+                if (a > cursor) {
+                    val duration = durationFromMinutes(a - cursor)
+                    lines += "${format12(fromMinutes(cursor))} | EMPTY | $duration"
+                }
+                val actualStart = maxOf(a, cursor)
+                if (b <= actualStart) return@forEach
                 val log = logs[key to habit.id]
-                val time = format12(habit.startTime)
                 val question = habit.question.trim().takeIf { it.isNotEmpty() }?.let { " | Question: $it" }.orEmpty()
                 val detail = when (log?.status) {
                     "done" -> "DONE"
@@ -203,13 +224,41 @@ class HabitsViewModel(app: Application) : AndroidViewModel(app) {
                         (log.note.takeIf { it.isNotBlank() }?.let { " | Note: $it" } ?: "")
                     else -> "UNMARKED"
                 }
-                lines += "$time | ${habit.name} | $detail$question"
+                lines += "${format12(fromMinutes(actualStart))} | ${habit.name} | $detail$question"
+                cursor = b
             }
+            if (cursor < sleepMinute) {
+                val duration = durationFromMinutes(sleepMinute - cursor)
+                lines += "${format12(fromMinutes(cursor))} | EMPTY | $duration"
+            }
+            lines += "${format12(fromMinutes(sleepMinute))} | Sleep"
             lines += ""
             date = date.plusDays(1)
             count++
         }
         return lines.joinToString("\n").trim()
+    }
+
+    private fun parseMinutes(value: String): Int? {
+        val parts = value.split(":")
+        if (parts.size != 2) return null
+        val hour = parts[0].toIntOrNull()?.takeIf { it in 0..23 } ?: return null
+        val minute = parts[1].toIntOrNull()?.takeIf { it in 0..59 } ?: return null
+        return hour * 60 + minute
+    }
+
+    private fun fromMinutes(value: Int): String =
+        "%02d:%02d".format((value / 60).coerceIn(0, 23), value % 60)
+
+    private fun durationFromMinutes(value: Int): String {
+        val minutes = value.coerceAtLeast(0)
+        val hours = minutes / 60
+        val mins = minutes % 60
+        return when {
+            hours == 0 -> "$mins min"
+            mins == 0 -> if (hours == 1) "1 h" else "$hours h"
+            else -> "$hours h $mins min"
+        }
     }
 
     fun importJson(raw: String, onDone: (Boolean) -> Unit) {

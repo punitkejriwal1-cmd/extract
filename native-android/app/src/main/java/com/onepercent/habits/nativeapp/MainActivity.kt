@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -46,8 +47,12 @@ class MainActivity : ComponentActivity() {
             var dark by remember { mutableStateOf(settingsPrefs.getBoolean("dark_theme", true)) }
             var fontScale by remember { mutableStateOf(settingsPrefs.getFloat("font_scale", 1.0f).coerceIn(0.6f, 1.0f)) }
             var visibleDays by remember { mutableStateOf(settingsPrefs.getInt("visible_days", 4).coerceIn(1, 7)) }
+            var wakeUpTime by remember { mutableStateOf(settingsPrefs.getString("wake_up_time", "05:00") ?: "05:00") }
+            var sleepTime by remember { mutableStateOf(settingsPrefs.getString("sleep_time", "21:00") ?: "21:00") }
             var screen by remember { mutableStateOf<Screen>(Screen.Home) }
             val systemDensity = LocalDensity.current
+
+            BackHandler(enabled = screen != Screen.Home) { screen = Screen.Home }
 
             CompositionLocalProvider(
                 LocalDensity provides Density(
@@ -59,6 +64,8 @@ class MainActivity : ComponentActivity() {
                     when (val s = screen) {
                         Screen.Home -> HomeScreen(
                             vm = vm,
+                            wakeUpTime = wakeUpTime,
+                            sleepTime = sleepTime,
                             onAdd = { screen = Screen.Edit(null) },
                             onEdit = { screen = Screen.Edit(it) },
                             onOpenStatus = { id, date -> screen = Screen.Status(id, date) },
@@ -100,6 +107,16 @@ class MainActivity : ComponentActivity() {
                                 visibleDays = it.coerceIn(1, 7)
                                 settingsPrefs.edit().putInt("visible_days", visibleDays).apply()
                                 vm.setVisibleDays(visibleDays)
+                            },
+                            wakeUpTime = wakeUpTime,
+                            onWakeUpTimeChange = {
+                                wakeUpTime = it
+                                settingsPrefs.edit().putString("wake_up_time", it).apply()
+                            },
+                            sleepTime = sleepTime,
+                            onSleepTimeChange = {
+                                sleepTime = it
+                                settingsPrefs.edit().putString("sleep_time", it).apply()
                             },
                             vm = vm,
                             onClose = { screen = Screen.Home },

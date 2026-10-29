@@ -1,5 +1,6 @@
 package com.onepercent.habits.nativeapp.ui
 
+import android.app.TimePickerDialog
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -7,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -48,6 +50,10 @@ fun SettingsScreen(
     onFontScaleChange: (Float) -> Unit,
     visibleDays: Int,
     onVisibleDaysChange: (Int) -> Unit,
+    wakeUpTime: String,
+    onWakeUpTimeChange: (String) -> Unit,
+    sleepTime: String,
+    onSleepTimeChange: (String) -> Unit,
     vm: HabitsViewModel,
     onClose: () -> Unit,
 ) {
@@ -86,6 +92,7 @@ fun SettingsScreen(
         Column(
             Modifier
                 .padding(padding)
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -141,6 +148,21 @@ fun SettingsScreen(
                 }
             }
 
+            Text("Daily schedule", style = MaterialTheme.typography.titleMedium)
+            Text("These times define the first and last blocks of your timetable.", style = MaterialTheme.typography.bodySmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = {
+                    val p = wakeUpTime.split(":")
+                    TimePickerDialog(context, { _, h, m -> onWakeUpTimeChange("%02d:%02d".format(h, m)) },
+                        p.getOrNull(0)?.toIntOrNull() ?: 5, p.getOrNull(1)?.toIntOrNull() ?: 0, false).show()
+                }, modifier = Modifier.weight(1f)) { Text("Wake-up: ${displayTime(wakeUpTime)}") }
+                OutlinedButton(onClick = {
+                    val p = sleepTime.split(":")
+                    TimePickerDialog(context, { _, h, m -> onSleepTimeChange("%02d:%02d".format(h, m)) },
+                        p.getOrNull(0)?.toIntOrNull() ?: 21, p.getOrNull(1)?.toIntOrNull() ?: 0, false).show()
+                }, modifier = Modifier.weight(1f)) { Text("Sleep: ${displayTime(sleepTime)}") }
+            }
+
             Text("Backup", style = MaterialTheme.typography.titleMedium)
             Text(
                 "Export saves a JSON file. Import restores habits after reinstall.",
@@ -184,4 +206,14 @@ fun SettingsScreen(
             message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
         }
     }
+}
+
+
+private fun displayTime(value: String): String {
+    val p = value.split(":")
+    val hour = p.getOrNull(0)?.toIntOrNull() ?: return value
+    val minute = p.getOrNull(1)?.toIntOrNull() ?: return value
+    val suffix = if (hour >= 12) "PM" else "AM"
+    val h12 = when (hour % 12) { 0 -> 12; else -> hour % 12 }
+    return "%d:%02d %s".format(h12, minute, suffix)
 }
