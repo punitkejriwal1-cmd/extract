@@ -171,8 +171,11 @@ class HabitsViewModel(app: Application) : AndroidViewModel(app) {
         val settings = ctx.getSharedPreferences("app_settings", android.content.Context.MODE_PRIVATE)
         val wake = settings.getString("wake_up_time", "05:00") ?: "05:00"
         val sleep = settings.getString("sleep_time", "21:00") ?: "21:00"
-        val wakeMinute = parseMinutes(wake) ?: 300
-        val sleepMinute = parseMinutes(sleep)?.takeIf { it > wakeMinute } ?: 1260
+        val requestedWake = parseMinutes(wake) ?: 300
+        val requestedSleep = parseMinutes(sleep) ?: 1260
+        val validSchedule = requestedSleep > requestedWake
+        val wakeMinute = if (validSchedule) requestedWake else 300
+        val sleepMinute = if (validSchedule) requestedSleep else 1260
         val habits = repo.getAllHabits().sortedBy { it.startTime }
         val logs = repo.getAllLogs().associateBy { it.dateKey to it.habitId }
         val today = LocalDate.now()
