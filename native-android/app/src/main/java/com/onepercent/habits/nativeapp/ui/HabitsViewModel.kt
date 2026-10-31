@@ -231,7 +231,7 @@ class HabitsViewModel(app: Application) : AndroidViewModel(app) {
             }
             if (cursor < sleepMinute) {
                 val duration = durationFromMinutes(sleepMinute - cursor)
-                lines += "${format12(fromMinutes(cursor))} | EMPTY | $duration"
+                lines += "${format12(fromMinutes(cursor))} | Empty block – $duration"
             }
             val sleepLog = logs[key to SLEEP_ID]
             lines += "${format12(fromMinutes(sleepMinute))} | Sleep | ${sleepLog?.status?.uppercase() ?: "UNMARKED"}" +
