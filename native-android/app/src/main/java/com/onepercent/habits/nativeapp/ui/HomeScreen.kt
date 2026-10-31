@@ -122,11 +122,12 @@ fun HomeScreen(
                     is TimelineBlock.Task -> "task-${block.habit.id}"
                 } }) { block ->
                     when (block) {
-                        is TimelineBlock.Marker -> MarkerRow(block.label, block.time, state.dateKeys.size, dayCellSize)
-                        is TimelineBlock.Empty -> EmptyRow(block.start, block.end, state.dateKeys.size, dayCellSize)
+                        is TimelineBlock.Marker -> MarkerRow(block.label, block.time)
+                        is TimelineBlock.Empty -> EmptyRow(block.start, block.end)
                         is TimelineBlock.Task -> TaskRow(
                             habit = block.habit,
                             color = block.color,
+                            start = block.start,
                             dateKeys = state.dateKeys,
                             dayCellSize = dayCellSize,
                             logsByKey = state.logsByKey,
@@ -135,20 +136,13 @@ fun HomeScreen(
                         )
                     }
                 }
-                item {
-                    Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 12.dp)) {
-                        Text(format12(sleepTime), modifier = Modifier.width(62.dp), fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Spacer(Modifier.weight(1f))
-                    }
-                }
             }
         }
     }
 }
 
 @Composable
-private fun MarkerRow(label: String, time: String, dayCount: Int, dayCellSize: Dp) {
+private fun MarkerRow(label: String, time: String) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -160,12 +154,11 @@ private fun MarkerRow(label: String, time: String, dayCount: Int, dayCellSize: D
         ) {
             Text(label, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
         }
-        ProgressSpacer(dayCount, dayCellSize)
     }
 }
 
 @Composable
-private fun EmptyRow(start: Int, end: Int, dayCount: Int, dayCellSize: Dp) {
+private fun EmptyRow(start: Int, end: Int) {
     val duration = durationFromMinutes(end - start)
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
@@ -176,14 +169,6 @@ private fun EmptyRow(start: Int, end: Int, dayCount: Int, dayCellSize: Dp) {
             .padding(horizontal = 10.dp, vertical = 7.dp)) {
             Text(duration, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        ProgressSpacer(dayCount, dayCellSize)
-    }
-}
-
-@Composable
-private fun ProgressSpacer(dayCount: Int, dayCellSize: Dp) {
-    Row(horizontalArrangement = Arrangement.spacedBy(if (dayCount >= 6) 2.dp else 4.dp)) {
-        repeat(dayCount) { Spacer(Modifier.size(dayCellSize)) }
     }
 }
 
@@ -191,6 +176,7 @@ private fun ProgressSpacer(dayCount: Int, dayCellSize: Dp) {
 private fun TaskRow(
     habit: HabitEntity,
     color: Color,
+    start: Int,
     dateKeys: List<String>,
     dayCellSize: Dp,
     logsByKey: Map<String, Map<String, LogEntity>>,
@@ -201,7 +187,7 @@ private fun TaskRow(
         Modifier.fillMaxWidth().clickable(onClick = onEdit).padding(horizontal = 12.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(format12(habit.startTime), modifier = Modifier.width(62.dp), fontSize = 11.sp,
+        Text(format12(fromMinutes(start)), modifier = Modifier.width(62.dp), fontSize = 11.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         Box(
             Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(color).padding(horizontal = 10.dp, vertical = 10.dp),
