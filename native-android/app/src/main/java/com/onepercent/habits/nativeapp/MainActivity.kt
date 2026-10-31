@@ -49,7 +49,7 @@ class MainActivity : ComponentActivity() {
             var visibleDays by remember { mutableStateOf(settingsPrefs.getInt("visible_days", 4).coerceIn(1, 7)) }
             var wakeUpTime by remember { mutableStateOf(settingsPrefs.getString("wake_up_time", "05:00") ?: "05:00") }
             var sleepTime by remember { mutableStateOf(settingsPrefs.getString("sleep_time", "21:00") ?: "21:00") }
-            var screen by remember { mutableStateOf<Screen>(Screen.Home) }
+            var screen by remember { mutableStateOf<Screen>(if (settingsPrefs.getBoolean("schedule_configured", false)) Screen.Home else Screen.Settings) }
             val systemDensity = LocalDensity.current
 
             BackHandler(enabled = screen != Screen.Home) { screen = Screen.Home }
@@ -84,7 +84,10 @@ class MainActivity : ComponentActivity() {
                                 vm.deleteHabit(id)
                                 screen = Screen.Home
                             },
-                            onClose = { screen = Screen.Home },
+                            onClose = {
+                                settingsPrefs.edit().putBoolean("schedule_configured", true).apply()
+                                screen = Screen.Home
+                            },
                         )
                         is Screen.Status -> StatusScreen(
                             habitId = s.habitId,
