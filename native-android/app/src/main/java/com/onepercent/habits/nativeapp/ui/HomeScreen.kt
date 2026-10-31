@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
@@ -47,10 +46,8 @@ import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
 
-private val RAINBOW = listOf(
-    Color(0xFFFF0000), Color(0xFFFF7F00), Color(0xFFFFFF00),
-    Color(0xFF00A550), Color(0xFF0000FF), Color(0xFF4B0082), Color(0xFF8F00FF),
-)
+const val WAKE_ID = "__wake_up__"
+const val SLEEP_ID = "__sleep__"
 
 private sealed class TimelineBlock {
     data class Marker(val label: String, val time: String) : TimelineBlock()
@@ -64,7 +61,7 @@ fun HomeScreen(
     vm: HabitsViewModel,
     wakeUpTime: String,
     sleepTime: String,
-    onAdd: () -> Unit,
+    onAdd: (startTime: String, endTime: String) -> Unit,
     onEdit: (HabitEntity) -> Unit,
     onOpenStatus: (habitId: String, dateKey: String) -> Unit,
     onSettings: () -> Unit,
@@ -80,17 +77,17 @@ fun HomeScreen(
         else -> 22.dp
     }
     val timeline = buildTimeline(state.habits, wakeUpTime, sleepTime)
-    val done = state.habits.count { h ->
-        state.logsByKey[state.dateKeys.firstOrNull().orEmpty()]?.get(h.id)?.status == "done"
-    }
+    val todayLogs = state.logsByKey[state.dateKeys.firstOrNull().orEmpty()].orEmpty()
+    val totalActivities = state.habits.size + 2
+    val done = state.habits.count { h -> todayLogs[h.id]?.status == "done" } +
+        listOf(WAKE_ID, SLEEP_ID).count { todayLogs[it]?.status == "done" }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("Timetable", fontWeight = FontWeight.Bold) },
+                title = { Text("Score: $done / $totalActivities", fontWeight = FontWeight.Bold) },
                 actions = {
-                    IconButton(onClick = onAdd) { Icon(Icons.Default.Add, contentDescription = "Add habit") }
                     IconButton(onClick = onCopyLogs) { Icon(Icons.Default.ContentCopy, contentDescription = "Copy log") }
                     IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, contentDescription = "Settings") }
                 },
@@ -122,11 +119,17 @@ fun HomeScreen(
                     is TimelineBlock.Task -> "task-${block.habit.id}"
                 } }) { block ->
                     when (block) {
-                        is TimelineBlock.Marker -> MarkerRow(block.label, block.time, state.dateKeys.size, dayCellSize)
-                        is TimelineBlock.Empty -> EmptyRow(block.start, block.end, state.dateKeys.size, dayCellSize)
+                        is TimelineBlock.Marker -> MarkerRow(
+                            block.label, block.time, if (block.label == "Wake-up") WAKE_ID else SLEEP_ID,
+                            state.dateKeys, dayCellSize, state.logsByKey,
+                            onCell = { dateKey -> onOpenStatus(if (block.label == "Wake-up") WAKE_ID else SLEEP_ID, dateKey) },
+                        )
+                        is TimelineBlock.Empty -> EmptyRow(block.start, block.end, state.dateKeys.size, dayCellSize) {
+                            onAdd(fromMinutes(block.start), fromMinutes(block.end))
+                        }
                         is TimelineBlock.Task -> TaskRow(
                             habit = block.habit,
-                            color = block.color,
+                            color = Color(block.habit.color),
                             dateKeys = state.dateKeys,
                             dayCellSize = dayCellSize,
                             logsByKey = state.logsByKey,
@@ -148,7 +151,10 @@ fun HomeScreen(
 }
 
 @Composable
-private fun MarkerRow(label: String, time: String, dayCount: Int, dayCellSize: Dp) {
+private fun MarkerRow(
+    label: String, time: String, id: String, dateKeys: List<String>, dayCellSize: Dp,
+    logsByKey: Map<String, Map<String, LogEntity>>, onCell: (String) -> Unit,
+) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -160,12 +166,15 @@ private fun MarkerRow(label: String, time: String, dayCount: Int, dayCellSize: D
         ) {
             Text(label, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
         }
-        ProgressSpacer(dayCount, dayCellSize)
+        Spacer(Modifier.width(4.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(if (dateKeys.size >= 6) 2.dp else 4.dp)) {
+            dateKeys.forEach { key -> StatusCell(logsByKey[key]?.get(id), dayCellSize) { onCell(key) } }
+        }
     }
 }
 
 @Composable
-private fun EmptyRow(start: Int, end: Int, dayCount: Int, dayCellSize: Dp) {
+private fun EmptyRow(start: Int, end: Int, dayCount: Int, dayCellSize: Dp, onClick: () -> Unit) {
     val duration = durationFromMinutes(end - start)
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
@@ -173,7 +182,7 @@ private fun EmptyRow(start: Int, end: Int, dayCount: Int, dayCellSize: Dp) {
     ) {
         Text(format12(fromMinutes(start)), modifier = Modifier.width(62.dp), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Box(Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f))
-            .padding(horizontal = 10.dp, vertical = 7.dp)) {
+            .clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 7.dp)) {
             Text(duration, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         ProgressSpacer(dayCount, dayCellSize)
@@ -256,11 +265,11 @@ private fun buildTimeline(habits: List<HabitEntity>, wake: String, sleep: String
     val blocks = mutableListOf<TimelineBlock>()
     blocks += TimelineBlock.Marker("Wake-up", fromMinutes(start))
     var cursor = start
-    sorted.forEachIndexed { index, (habit, a, b) ->
+    sorted.forEach { (habit, a, b) ->
         if (a > cursor) blocks += TimelineBlock.Empty(cursor, a)
         val actualStart = maxOf(a, cursor)
         if (b > actualStart) {
-            blocks += TimelineBlock.Task(habit, actualStart, b, RAINBOW[index % RAINBOW.size])
+            blocks += TimelineBlock.Task(habit, actualStart, b, Color(habit.color))
             cursor = b
         }
     }
