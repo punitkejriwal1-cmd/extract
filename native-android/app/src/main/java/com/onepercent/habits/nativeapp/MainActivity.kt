@@ -66,7 +66,7 @@ class MainActivity : ComponentActivity() {
                             vm = vm,
                             wakeUpTime = wakeUpTime,
                             sleepTime = sleepTime,
-                            onAdd = { screen = Screen.Edit(null) },
+                            onAdd = { start, end -> screen = Screen.Edit(null, start, end) },
                             onEdit = { screen = Screen.Edit(it) },
                             onOpenStatus = { id, date -> screen = Screen.Status(id, date) },
                             onSettings = { screen = Screen.Settings },
@@ -74,6 +74,8 @@ class MainActivity : ComponentActivity() {
                         )
                         is Screen.Edit -> HabitEditorScreen(
                             existing = s.habit,
+                            allowedStart = s.allowedStart,
+                            allowedEnd = s.allowedEnd,
                             onSave = { id, name, q, start, end, remind, days, freqType, freqDays, freqNum, freqDates, color ->
                                 vm.saveHabit(id, name, q, start, end, remind, days, freqType, freqDays, freqNum, freqDates, color)
                                 screen = Screen.Home
@@ -145,7 +147,7 @@ class MainActivity : ComponentActivity() {
 
 private sealed class Screen {
     data object Home : Screen()
-    data class Edit(val habit: HabitEntity?) : Screen()
+    data class Edit(val habit: HabitEntity?, val allowedStart: String = "05:00", val allowedEnd: String = "21:00") : Screen()
     data class Status(val habitId: String, val dateKey: String) : Screen()
     data object Settings : Screen()
     data object Audit : Screen()
