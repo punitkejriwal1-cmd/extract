@@ -40,7 +40,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 fun StatusScreen(habitId: String, dateKey: String, vm: HabitsViewModel, onClose: () -> Unit) {
     val state by vm.uiState.collectAsStateWithLifecycle()
     val availableReasons by vm.reasons.collectAsState()
-    val habit = state.habits.find { it.id == habitId }
+    val habit = state.habits.find { it.id == habitId } ?: when (habitId) {
+        WAKE_ID -> HabitEntity(WAKE_ID, "Wake-up", startTime = "05:00", reminderTime = "05:00")
+        SLEEP_ID -> HabitEntity(SLEEP_ID, "Sleep", startTime = "21:00", reminderTime = "21:00")
+        else -> null
+    }
     val existing = state.logsByKey[dateKey]?.get(habitId)
 
     var status by remember(habitId, dateKey, existing?.status) { mutableStateOf(existing?.status) }
