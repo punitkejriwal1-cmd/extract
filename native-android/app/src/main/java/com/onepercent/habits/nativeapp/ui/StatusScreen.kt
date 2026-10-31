@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.onepercent.habits.nativeapp.data.HabitEntity
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
