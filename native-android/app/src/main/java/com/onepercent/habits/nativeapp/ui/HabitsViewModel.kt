@@ -197,7 +197,9 @@ class HabitsViewModel(app: Application) : AndroidViewModel(app) {
         while (!date.isAfter(endDate) && count < 62) {
             val key = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
             lines += "Date: ${date.format(DateTimeFormatter.ofPattern("EEE, dd MMM yyyy"))}"
-            lines += "${format12(wake)} | Wake-up"
+            val wakeLog = logs[key to WAKE_ID]
+            lines += "${format12(wake)} | Wake-up | ${wakeLog?.status?.uppercase() ?: "UNMARKED"}" +
+                (wakeLog?.note?.takeIf { it.isNotBlank() }?.let { " | Note: $it" } ?: "")
             var cursor = wakeMinute
             val scheduled = habits.mapNotNull { habit ->
                 val a = parseMinutes(habit.startTime) ?: return@mapNotNull null
@@ -208,7 +210,7 @@ class HabitsViewModel(app: Application) : AndroidViewModel(app) {
             scheduled.forEach { (habit, a, b) ->
                 if (a > cursor) {
                     val duration = durationFromMinutes(a - cursor)
-                    lines += "${format12(fromMinutes(cursor))} | EMPTY | $duration"
+                    lines += "${format12(fromMinutes(cursor))} | Empty block – $duration"
                 }
                 val actualStart = maxOf(a, cursor)
                 if (b <= actualStart) return@forEach
@@ -231,7 +233,9 @@ class HabitsViewModel(app: Application) : AndroidViewModel(app) {
                 val duration = durationFromMinutes(sleepMinute - cursor)
                 lines += "${format12(fromMinutes(cursor))} | EMPTY | $duration"
             }
-            lines += "${format12(fromMinutes(sleepMinute))} | Sleep"
+            val sleepLog = logs[key to SLEEP_ID]
+            lines += "${format12(fromMinutes(sleepMinute))} | Sleep | ${sleepLog?.status?.uppercase() ?: "UNMARKED"}" +
+                (sleepLog?.note?.takeIf { it.isNotBlank() }?.let { " | Note: $it" } ?: "")
             lines += ""
             date = date.plusDays(1)
             count++
