@@ -78,8 +78,9 @@ fun HomeScreen(
     }
     val timeline = buildTimeline(state.habits, wakeUpTime, sleepTime)
     val todayLogs = state.logsByKey[state.dateKeys.firstOrNull().orEmpty()].orEmpty()
-    val totalActivities = state.habits.size + 2
-    val done = state.habits.count { h -> todayLogs[h.id]?.status == "done" } +
+    val scheduledHabits = timeline.filterIsInstance<TimelineBlock.Task>().map { it.habit }
+    val totalActivities = scheduledHabits.size + 2
+    val done = scheduledHabits.count { h -> todayLogs[h.id]?.status == "done" } +
         listOf(WAKE_ID, SLEEP_ID).count { todayLogs[it]?.status == "done" }
 
     Scaffold(
@@ -218,6 +219,7 @@ private fun TaskRow(
             Text(habit.name, color = if (color == Color(0xFFFFFF00)) Color.Black else Color.White,
                 fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
+        Spacer(Modifier.width(4.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(if (dateKeys.size >= 6) 2.dp else 4.dp)) {
             dateKeys.forEach { key -> StatusCell(logsByKey[key]?.get(habit.id), dayCellSize) { onCell(key) } }
         }
