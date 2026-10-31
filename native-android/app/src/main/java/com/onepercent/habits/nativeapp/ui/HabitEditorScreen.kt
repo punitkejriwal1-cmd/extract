@@ -2,6 +2,9 @@ package com.onepercent.habits.nativeapp.ui
 
 import android.app.TimePickerDialog
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -34,15 +37,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.CircleShape
 import com.onepercent.habits.nativeapp.data.HabitEntity
 import java.util.Calendar
-import kotlin.random.Random
 
 private val DAY_LABELS = listOf("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
-private val COLORS = listOf(
-    0xFF3B82F6, 0xFFEC4899, 0xFFA78B6D, 0xFF22C55E,
-    0xFF64748B, 0xFF8B5CF6, 0xFFF59E0B, 0xFF06B6D4,
-)
+private val COLORS = listOf(0xFF8B5CF6, 0xFF38BDF8, 0xFFF97316, 0xFF22C55E, 0xFFF87171)
 
 private fun displayTime(value: String): String {
     val parts = value.split(":")
@@ -58,6 +59,8 @@ private fun displayTime(value: String): String {
 @Composable
 fun HabitEditorScreen(
     existing: HabitEntity?,
+    allowedStart: String = "05:00",
+    allowedEnd: String = "21:00",
     onSave: (
         id: String?, name: String, question: String, startTime: String, endTime: String,
         reminderTime: String, reminderDays: String, freqType: String, freqDays: String,
@@ -69,13 +72,14 @@ fun HabitEditorScreen(
     val context = LocalContext.current
     var name by remember(existing?.id) { mutableStateOf(existing?.name.orEmpty()) }
     var question by remember(existing?.id) { mutableStateOf(existing?.question.orEmpty()) }
-    var start by remember(existing?.id) { mutableStateOf(existing?.startTime ?: "09:00") }
-    var end by remember(existing?.id) { mutableStateOf(existing?.endTime ?: "11:00") }
+    var start by remember(existing?.id, allowedStart) { mutableStateOf(existing?.startTime ?: allowedStart) }
+    var end by remember(existing?.id, allowedEnd) { mutableStateOf(existing?.endTime ?: allowedEnd) }
     var remind by remember(existing?.id) { mutableStateOf(existing?.reminderTime ?: "09:00") }
     var days by remember(existing?.id) {
         mutableStateOf(existing?.reminderDays?.split(",")?.mapNotNull { it.trim().toIntOrNull() }?.toSet() ?: (0..6).toSet())
     }
-    var color by remember(existing?.id) { mutableStateOf(existing?.color ?: COLORS[Random.nextInt(COLORS.size)]) }
+    var color by remember(existing?.id) { mutableStateOf(existing?.color ?: COLORS.first()) }
+    var validation by remember(existing?.id) { mutableStateOf<String?>(null) }
 
     fun chooseTime(current: String, onSelected: (String) -> Unit) {
         val parts = current.split(":")
@@ -115,6 +119,17 @@ fun HabitEditorScreen(
                 }
             }
 
+            Text("Activity colour", style = MaterialTheme.typography.labelLarge)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                COLORS.forEachIndexed { index, value ->
+                    Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                        Box(Modifier.size(38.dp).clip(CircleShape).background(Color(value)).clickable { color = value })
+                        Text(listOf("Purple", "Sky blue", "Orange", "Green", "Light red")[index], style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+            validation?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+
             Text("Reminder time", style = MaterialTheme.typography.labelLarge)
             OutlinedButton(onClick = { chooseTime(remind) { remind = it } }, modifier = Modifier.fillMaxWidth()) {
                 Text("Remind me at  ${displayTime(remind)}")
@@ -135,6 +150,15 @@ fun HabitEditorScreen(
             Button(
                 onClick = {
                     if (name.isBlank()) return@Button
+                    val a = start.split(":").let { it[0].toInt() * 60 + it[1].toInt() }
+                    val b = end.split(":").let { it[0].toInt() * 60 + it[1].toInt() }
+                    val min = allowedStart.split(":").let { it[0].toInt() * 60 + it[1].toInt() }
+                    val max = allowedEnd.split(":").let { it[0].toInt() * 60 + it[1].toInt() }
+                    if (a < min || b > max || b <= a) {
+                        validation = "Activity must fit within ${displayTime(allowedStart)}–${displayTime(allowedEnd)}."
+                        return@Button
+                    }
+                    validation = null
                     onSave(
                         existing?.id, name.trim(), question.trim(),
                         start.ifBlank { "09:00" }, end,
