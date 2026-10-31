@@ -52,7 +52,10 @@ class MainActivity : ComponentActivity() {
             var screen by remember { mutableStateOf<Screen>(if (settingsPrefs.getBoolean("schedule_configured", false)) Screen.Home else Screen.Settings) }
             val systemDensity = LocalDensity.current
 
-            BackHandler(enabled = screen != Screen.Home) { screen = Screen.Home }
+            BackHandler(enabled = screen != Screen.Home) {
+                if (screen == Screen.Settings) settingsPrefs.edit().putBoolean("schedule_configured", true).apply()
+                screen = Screen.Home
+            }
 
             CompositionLocalProvider(
                 LocalDensity provides Density(
@@ -84,10 +87,7 @@ class MainActivity : ComponentActivity() {
                                 vm.deleteHabit(id)
                                 screen = Screen.Home
                             },
-                            onClose = {
-                                settingsPrefs.edit().putBoolean("schedule_configured", true).apply()
-                                screen = Screen.Home
-                            },
+                            onClose = { screen = Screen.Home },
                         )
                         is Screen.Status -> StatusScreen(
                             habitId = s.habitId,
@@ -124,7 +124,10 @@ class MainActivity : ComponentActivity() {
                                 settingsPrefs.edit().putString("sleep_time", it).apply()
                             },
                             vm = vm,
-                            onClose = { screen = Screen.Home },
+                            onClose = {
+                                settingsPrefs.edit().putBoolean("schedule_configured", true).apply()
+                                screen = Screen.Home
+                            },
                         )
                     }
                 }
