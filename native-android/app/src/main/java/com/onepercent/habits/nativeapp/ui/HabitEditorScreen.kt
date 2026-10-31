@@ -1,5 +1,6 @@
 package com.onepercent.habits.nativeapp.ui
 
+import android.app.TimePickerDialog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -7,6 +8,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -29,47 +32,59 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.onepercent.habits.nativeapp.data.HabitEntity
+import java.util.Calendar
+import kotlin.random.Random
 
-private val DAY_LABELS = listOf("S", "M", "T", "W", "T", "F", "S")
+private val DAY_LABELS = listOf("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
 private val COLORS = listOf(
     0xFF3B82F6, 0xFFEC4899, 0xFFA78B6D, 0xFF22C55E,
     0xFF64748B, 0xFF8B5CF6, 0xFFF59E0B, 0xFF06B6D4,
 )
+
+private fun displayTime(value: String): String {
+    val parts = value.split(":")
+    if (parts.size < 2) return value
+    val hour = parts[0].toIntOrNull() ?: return value
+    val minute = parts[1].toIntOrNull() ?: return value
+    val suffix = if (hour >= 12) "PM" else "AM"
+    val hour12 = when (hour % 12) { 0 -> 12; else -> hour % 12 }
+    return "%d:%02d %s".format(hour12, minute, suffix)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HabitEditorScreen(
     existing: HabitEntity?,
     onSave: (
-        id: String?,
-        name: String,
-        question: String,
-        startTime: String,
-        endTime: String,
-        reminderTime: String,
-        reminderDays: String,
-        color: Long,
+        id: String?, name: String, question: String, startTime: String, endTime: String,
+        reminderTime: String, reminderDays: String, freqType: String, freqDays: String,
+        freqNum: Int, freqDates: String, color: Long,
     ) -> Unit,
     onDelete: (String) -> Unit,
     onClose: () -> Unit,
 ) {
-    var name by remember { mutableStateOf(existing?.name.orEmpty()) }
-    var question by remember { mutableStateOf(existing?.question.orEmpty()) }
-    var start by remember { mutableStateOf(existing?.startTime ?: "09:00") }
-    var end by remember { mutableStateOf(existing?.endTime ?: "11:00") }
-    var remind by remember { mutableStateOf(existing?.reminderTime ?: "09:00") }
-    var days by remember {
-        mutableStateOf(
-            existing?.reminderDays
-                ?.split(",")
-                ?.mapNotNull { it.trim().toIntOrNull() }
-                ?.toSet()
-                ?: (0..6).toSet(),
-        )
+    val context = LocalContext.current
+    var name by remember(existing?.id) { mutableStateOf(existing?.name.orEmpty()) }
+    var question by remember(existing?.id) { mutableStateOf(existing?.question.orEmpty()) }
+    var start by remember(existing?.id) { mutableStateOf(existing?.startTime ?: "09:00") }
+    var end by remember(existing?.id) { mutableStateOf(existing?.endTime ?: "11:00") }
+    var remind by remember(existing?.id) { mutableStateOf(existing?.reminderTime ?: "09:00") }
+    var days by remember(existing?.id) {
+        mutableStateOf(existing?.reminderDays?.split(",")?.mapNotNull { it.trim().toIntOrNull() }?.toSet() ?: (0..6).toSet())
     }
-    var color by remember { mutableStateOf(existing?.color ?: COLORS[0]) }
+    var color by remember(existing?.id) { mutableStateOf(existing?.color ?: COLORS[Random.nextInt(COLORS.size)]) }
+
+    fun chooseTime(current: String, onSelected: (String) -> Unit) {
+        val parts = current.split(":")
+        val hour = parts.getOrNull(0)?.toIntOrNull()?.coerceIn(0, 23) ?: 9
+        val minute = parts.getOrNull(1)?.toIntOrNull()?.coerceIn(0, 59) ?: 0
+        TimePickerDialog(context, { _, selectedHour, selectedMinute ->
+            onSelected("%02d:%02d".format(selectedHour, selectedMinute))
+        }, hour, minute, false).show()
+    }
 
     Scaffold(
         topBar = {
@@ -84,107 +99,59 @@ fun HabitEditorScreen(
         },
     ) { padding ->
         Column(
-            Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            Modifier.fillMaxSize().padding(padding).imePadding().padding(16.dp).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("Name") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = question,
-                onValueChange = { question = it },
-                label = { Text("Question (optional)") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            OutlinedTextField(value = name, onValueChange = { name = it.take(65) }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = question, onValueChange = { question = it.take(65) }, label = { Text("Question (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
 
             Text("Session time (display only)", style = MaterialTheme.typography.labelLarge)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = start,
-                    onValueChange = { start = it },
-                    label = { Text("Starts (HH:mm)") },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f),
-                )
-                OutlinedTextField(
-                    value = end,
-                    onValueChange = { end = it },
-                    label = { Text("Ends (HH:mm)") },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f),
-                )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { chooseTime(start) { start = it } }, modifier = Modifier.weight(1f)) {
+                    Text("Starts: ${displayTime(start)}")
+                }
+                OutlinedButton(onClick = { chooseTime(end) { end = it } }, modifier = Modifier.weight(1f)) {
+                    Text("Ends: ${displayTime(end)}")
+                }
             }
 
-            Text("Reminder", style = MaterialTheme.typography.labelLarge)
-            OutlinedTextField(
-                value = remind,
-                onValueChange = { remind = it },
-                label = { Text("Remind me at (HH:mm)") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                supportingText = { Text("Independent of start/end — pick any time") },
-            )
+            Text("Reminder time", style = MaterialTheme.typography.labelLarge)
+            OutlinedButton(onClick = { chooseTime(remind) { remind = it } }, modifier = Modifier.fillMaxWidth()) {
+                Text("Remind me at  ${displayTime(remind)}")
+            }
 
             Text("Reminder days", style = MaterialTheme.typography.labelLarge)
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
                 DAY_LABELS.forEachIndexed { i, label ->
                     FilterChip(
                         selected = i in days,
-                        onClick = {
-                            days = if (i in days) days - i else days + i
-                        },
+                        onClick = { days = if (i in days) days - i else days + i },
                         label = { Text(label) },
                     )
                 }
             }
 
-            Text("Color", style = MaterialTheme.typography.labelLarge)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                COLORS.forEach { c ->
-                    FilterChip(
-                        selected = color == c,
-                        onClick = { color = c },
-                        label = { Text("●") },
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(4.dp))
             Button(
                 onClick = {
                     if (name.isBlank()) return@Button
                     onSave(
-                        existing?.id,
-                        name,
-                        question,
-                        start.ifBlank { "09:00" },
-                        end,
+                        existing?.id, name.trim(), question.trim(),
+                        start.ifBlank { "09:00" }, end,
                         remind.ifBlank { start.ifBlank { "09:00" } },
                         days.sorted().joinToString(","),
+                        existing?.freqType ?: "daily",
+                        existing?.freqDays ?: "0,1,2,3,4,5,6",
+                        existing?.freqNum ?: 2,
+                        existing?.freqDates.orEmpty(),
                         color,
                     )
                 },
                 modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Save habit")
-            }
+            ) { Text("Save habit") }
 
             if (existing != null) {
-                OutlinedButton(
-                    onClick = { onDelete(existing.id) },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Delete")
-                }
+                OutlinedButton(onClick = { onDelete(existing.id) }, modifier = Modifier.fillMaxWidth()) { Text("Delete") }
             }
         }
     }

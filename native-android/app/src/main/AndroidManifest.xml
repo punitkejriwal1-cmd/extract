@@ -11,7 +11,7 @@
     <application
         android:name=".HabitsApp"
         android:allowBackup="true"
-        android:icon="@android:drawable/ic_menu_my_calendar"
+        android:icon="@drawable/timetable_logo_png"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.OnePercentHabits">
@@ -37,6 +37,8 @@
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
             </intent-filter>
         </receiver>
 

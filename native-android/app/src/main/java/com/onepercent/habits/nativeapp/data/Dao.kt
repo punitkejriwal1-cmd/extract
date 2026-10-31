@@ -38,6 +38,9 @@ interface LogDao {
     @Query("SELECT * FROM logs")
     suspend fun getAll(): List<LogEntity>
 
+    @Query("SELECT * FROM logs WHERE dateKey = :dateKey AND habitId = :habitId LIMIT 1")
+    suspend fun getForDateAndHabit(dateKey: String, habitId: String): LogEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(log: LogEntity)
 

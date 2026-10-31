@@ -1,104 +1,68 @@
-name: Android APK
+name: Native Android APK
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, native-android-final, native-android-timetable-v1.1]
   pull_request:
-    branches: [main, master]
+    branches: [main, master, native-android-final]
   workflow_dispatch:
   release:
     types: [published]
 
 concurrency:
-  group: android-apk-${{ github.ref }}
+  group: native-android-apk-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Build debug APK
+    name: Build and test native Android app
     runs-on: ubuntu-latest
     timeout-minutes: 45
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-
-      - name: Install JS dependencies
-        run: npm install
-
-      - name: Build mobile web assets
-        run: npm run build:mobile
 
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "21"
+          java-version: "17"
+          cache: gradle
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: platform-tools platforms;android-34 build-tools;34.0.0
+          packages: platform-tools platforms;android-35 build-tools;35.0.0
 
       - name: Accept Android licenses
         run: yes | sdkmanager --licenses || true
 
-      # Same debug keystore on every CI run so APKs can update each other
-      - name: Restore debug keystore
+      - name: Verify native project
+        run: |
+          test -f android/gradlew
+          test -f native-android/app/build.gradle.kts
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x android/gradlew
+
+      # Preserve the generated debug signing key between builds so APK updates
+      # use the same certificate. The currently installed APK may need one final reinstall.
+      - name: Restore persistent debug signing key
         uses: actions/cache@v4
         with:
           path: ~/.android/debug.keystore
-          key: android-debug-keystore-v1
+          key: one-percent-debug-signing-key-v1-${{ github.ref_name }}
 
-      - name: Ensure debug keystore exists
-        run: |
-          mkdir -p ~/.android
-          if [ ! -f ~/.android/debug.keystore ]; then
-            keytool -genkeypair -v \
-              -keystore ~/.android/debug.keystore \
-              -storepass android \
-              -alias androiddebugkey \
-              -keypass android \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -dname "CN=Android Debug,O=Android,C=US"
-          fi
+      - name: Run native unit tests
+        run: ./android/gradlew -p native-android testDebugUnitTest --no-daemon --stacktrace
 
-      - name: Check android folder
-        run: |
-          if [ ! -d android ]; then
-            echo "android/ folder missing"
-            exit 1
-          fi
-          ls android
+      - name: Build native debug APK
+        run: ./android/gradlew -p native-android assembleDebug --no-daemon --stacktrace
 
-      - name: Sync Capacitor
-        run: |
-          chmod +x node_modules/@capacitor/cli/bin/capacitor || true
-          node node_modules/@capacitor/cli/bin/capacitor sync android
-
-      - name: Build debug APK
-        working-directory: android
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
-
-      - name: Locate APK
-        id: apk
-        run: |
-          APK=$(find android/app/build/outputs/apk -name "*.apk" | head -n 1)
-          echo "path=$APK" >> "$GITHUB_OUTPUT"
-          ls -lh "$APK"
-
-      - name: Upload APK artifact
+      - name: Upload native APK
         uses: actions/upload-artifact@v4
         with:
-          name: one-percent-habits-debug
-          path: ${{ steps.apk.outputs.path }}
+          name: one-percent-habits-native-debug
+          path: native-android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
